@@ -212,11 +212,12 @@ const Profile = () => {
       </div>
 
       {message && (
-        <div className={`mb-4 px-4 py-3 rounded ${
-          message.includes('success') 
-            ? 'bg-green-100 border border-green-400 text-green-700'
-            : 'bg-red-100 border border-red-400 text-red-700'
-        }`}>
+        <div 
+          className={`mb-4 px-4 py-3 rounded border ${
+            message.includes('success') ? '' : 'bg-red-100 border-red-400 text-red-700'
+          }`}
+          style={message.includes('success') ? { backgroundColor: '#d1e5db', borderColor: '#47976f', color: '#27543e' } : {}}
+        >
           {message}
         </div>
       )}

@@ -2,10 +2,11 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   FaTachometerAlt, FaCalendarAlt, FaClipboardList, FaUser, 
-  FaClock, FaUsers, FaFileAlt, FaUserMd 
+  FaClock, FaUsers, FaFileAlt, FaUserMd, FaHeartbeat, FaNotesMedical
 } from 'react-icons/fa';
 import { useRole } from '../../context/RoleContext';
 import { USER_ROLES } from '../../utils/constants';
+import logo from '../../assets/logo.jfif';
 
 const Sidebar = () => {
   const location = useLocation();
@@ -35,6 +36,14 @@ const Sidebar = () => {
     { path: '/admin/logs', label: 'System Logs', icon: FaFileAlt }
   ];
 
+  const nurseLinks = [
+    { path: '/nurse/dashboard', label: 'Dashboard', icon: FaTachometerAlt },
+    { path: '/nurse/queue', label: 'Patient Queue', icon: FaCalendarAlt },
+    { path: '/nurse/vital-signs', label: 'Vital Signs', icon: FaHeartbeat },
+    { path: '/nurse/follow-ups', label: 'Follow-ups', icon: FaNotesMedical },
+    { path: '/nurse/profile', label: 'Profile', icon: FaUser }
+  ];
+
   const getLinks = () => {
     switch (userRole) {
       case USER_ROLES.PATIENT:
@@ -43,22 +52,25 @@ const Sidebar = () => {
         return doctorLinks;
       case USER_ROLES.ADMIN:
         return adminLinks;
+      case USER_ROLES.NURSE:
+        return nurseLinks;
       default:
         return [];
     }
   };
 
   return (
-    <div className="bg-primary-500 text-white w-64 min-h-screen fixed left-0 top-0 shadow-lg">
+    <div className="text-white w-64 min-h-screen fixed left-0 top-0 shadow-lg" style={{ backgroundColor: '#31694E' }}>
       <div className="p-6">
-        {/* Logo with cross symbol */}
-        <div className="flex items-center justify-center mb-4">
-          <div className="bg-white rounded-full w-16 h-16 flex items-center justify-center">
-            <span className="text-primary-500 text-3xl font-bold">+</span>
-          </div>
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-4">
+          <img
+            src={logo}
+            alt="Sun Valley Mega Health Center Logo"
+            className="w-20 h-20 rounded-full border-2 border-white shadow-md object-cover mb-3"
+          />
+          <h1 className="text-xl font-bold text-center">Sun Valley Mega Health Center</h1>
         </div>
-        <h1 className="text-xl font-bold text-center">Barangay Health Center</h1>
-        <p className="text-sm text-center text-green-100 mt-1">2025</p>
       </div>
       <nav className="mt-8">
         {getLinks().map((link) => {
@@ -69,9 +81,22 @@ const Sidebar = () => {
               to={link.path}
               className={`flex items-center px-6 py-3 transition-colors ${
                 isActive(link.path)
-                  ? 'bg-green-600 border-r-4 border-white'
-                  : 'hover:bg-green-600'
+                  ? 'border-r-4 border-white'
+                  : ''
               }`}
+              style={{
+                backgroundColor: isActive(link.path) ? '#27543e' : 'transparent'
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive(link.path)) {
+                  e.currentTarget.style.backgroundColor = '#27543e';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive(link.path)) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
             >
               <IconComponent className="mr-3 text-xl" />
               <span>{link.label}</span>

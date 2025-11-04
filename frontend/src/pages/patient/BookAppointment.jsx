@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import patientService from '../../services/patientService';
 import { useNavigate, Link } from 'react-router-dom';
-import { FaExclamationTriangle, FaInfoCircle, FaChevronDown, FaChevronUp, FaEdit } from 'react-icons/fa';
+import { FaExclamationTriangle, FaInfoCircle, FaChevronDown, FaChevronUp, FaEdit, FaCheckCircle, FaTimes } from 'react-icons/fa';
+import { useNotifications } from '../../context/NotificationContext';
 
 const BookAppointment = () => {
   const [doctors, setDoctors] = useState([]);
@@ -17,7 +18,10 @@ const BookAppointment = () => {
   const [loadingMedicalHistory, setLoadingMedicalHistory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [bookedAppointment, setBookedAppointment] = useState(null);
   const navigate = useNavigate();
+  const { addNotification } = useNotifications();
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -68,13 +72,56 @@ const BookAppointment = () => {
     setLoading(true);
 
     try {
-      await patientService.bookAppointment(formData);
-      navigate('/patient/dashboard');
+      const response = await patientService.bookAppointment(formData);
+      
+      // Get doctor name for the success message
+      const selectedDoctor = doctors.find(d => d._id === formData.doctor);
+      const doctorName = selectedDoctor?.name || 'Doctor';
+      
+      // Set booked appointment details
+      setBookedAppointment({
+        doctor: doctorName,
+        date: new Date(formData.appointmentDate).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }),
+        time: formData.appointmentTime,
+        reason: formData.reason
+      });
+      
+      // Show success notification
+      addNotification({
+        type: 'success',
+        title: 'Appointment Booked Successfully! ✓',
+        message: `Your appointment with Dr. ${doctorName} has been booked. Waiting for doctor's confirmation.`,
+        showBrowserNotification: true
+      });
+      
+      // Show success modal
+      setShowSuccessModal(true);
+      
+      // Reset form after a short delay
+      setTimeout(() => {
+        setFormData({
+          doctor: '',
+          appointmentDate: '',
+          appointmentTime: '',
+          reason: ''
+        });
+      }, 500);
+      
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to book appointment');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+    navigate('/patient/dashboard');
   };
 
   return (
@@ -380,6 +427,86 @@ const BookAppointment = () => {
           </button>
         </form>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && bookedAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-fadeIn">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <FaCheckCircle className="text-3xl text-green-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800">Appointment Booked!</h2>
+              </div>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <FaTimes className="text-xl" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                <p className="text-green-800 font-semibold mb-2">Your appointment has been successfully booked!</p>
+                <p className="text-sm text-green-700 mb-4">
+                  We'll notify you once the doctor confirms your appointment.
+                </p>
+              </div>
+
+              <div className="space-y-3 text-gray-700">
+                <div className="flex items-start gap-3">
+                  <FaInfoCircle className="text-primary-500 mt-1" />
+                  <div>
+                    <p className="font-semibold">Doctor:</p>
+                    <p>Dr. {bookedAppointment.doctor}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <FaInfoCircle className="text-primary-500 mt-1" />
+                  <div>
+                    <p className="font-semibold">Date:</p>
+                    <p>{bookedAppointment.date}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <FaInfoCircle className="text-primary-500 mt-1" />
+                  <div>
+                    <p className="font-semibold">Time:</p>
+                    <p>{bookedAppointment.time}</p>
+                  </div>
+                </div>
+                
+                {bookedAppointment.reason && (
+                  <div className="flex items-start gap-3">
+                    <FaInfoCircle className="text-primary-500 mt-1" />
+                    <div>
+                      <p className="font-semibold">Reason:</p>
+                      <p className="text-sm">{bookedAppointment.reason}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> Your appointment is currently pending. You will receive a notification once the doctor confirms it.
+              </p>
+            </div>
+
+            <button
+              onClick={handleCloseModal}
+              className="w-full bg-[#31694E] text-white py-3 rounded-lg font-semibold hover:bg-[#27543e] transition-colors"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

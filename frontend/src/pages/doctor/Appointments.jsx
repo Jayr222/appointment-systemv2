@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaClipboardList, FaExclamationTriangle, FaInfoCircle, FaTimes } from 'react-icons/fa';
+import { FaClipboardList, FaExclamationTriangle, FaInfoCircle, FaTimes, FaSearch } from 'react-icons/fa';
 import doctorService from '../../services/doctorService';
 import { APPOINTMENT_STATUS_COLORS, APPOINTMENT_STATUS } from '../../utils/constants';
+import { useNotifications } from '../../context/NotificationContext';
 
 const Appointments = () => {
   const [appointments, setAppointments] = useState([]);
+  const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [filterStatus, setFilterStatus] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showMedicalHistory, setShowMedicalHistory] = useState(false);
+  const [cancelModal, setCancelModal] = useState({ show: false, appointment: null, reason: '' });
+  const [cancelling, setCancelling] = useState(false);
   const navigate = useNavigate();
+  const { addNotification } = useNotifications();
 
   useEffect(() => {
     fetchAppointments();
@@ -20,12 +26,32 @@ const Appointments = () => {
     try {
       const response = await doctorService.getAppointments(filterStatus, '');
       setAppointments(response.appointments);
+      setFilteredAppointments(response.appointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const filtered = appointments.filter(appointment => {
+        const patientName = appointment.patient?.name || '';
+        const patientEmail = appointment.patient?.email || '';
+        const patientPhone = appointment.patient?.phone || '';
+        const reason = appointment.reason || '';
+        const query = searchQuery.toLowerCase();
+        return patientName.toLowerCase().includes(query) ||
+               patientEmail.toLowerCase().includes(query) ||
+               patientPhone.includes(query) ||
+               reason.toLowerCase().includes(query);
+      });
+      setFilteredAppointments(filtered);
+    } else {
+      setFilteredAppointments(appointments);
+    }
+  }, [searchQuery, appointments]);
 
   const handleStatusChange = async (appointmentId, status) => {
     try {
@@ -50,13 +76,71 @@ const Appointments = () => {
     setSelectedPatient(null);
   };
 
+  const handleCancelClick = (appointment) => {
+    // Only allow cancellation for pending or confirmed appointments
+    if (appointment.status === 'pending' || appointment.status === 'confirmed') {
+      setCancelModal({ show: true, appointment, reason: '' });
+    }
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!cancelModal.appointment || !cancelModal.reason.trim()) {
+      addNotification({
+        type: 'error',
+        title: 'Cancellation Failed',
+        message: 'Please provide a reason for cancellation.'
+      });
+      return;
+    }
+
+    setCancelling(true);
+    try {
+      await doctorService.cancelAppointment(cancelModal.appointment._id, cancelModal.reason);
+      addNotification({
+        type: 'success',
+        title: 'Appointment Cancelled',
+        message: 'The appointment has been successfully cancelled.',
+        showBrowserNotification: true
+      });
+      
+      // Refresh appointments
+      await fetchAppointments();
+      
+      setCancelModal({ show: false, appointment: null, reason: '' });
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: 'Cancellation Failed',
+        message: error.response?.data?.message || 'Failed to cancel appointment. Please try again.'
+      });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (loading) {
     return <div className="text-center py-8">Loading...</div>;
   }
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">Appointments</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Appointments</h1>
+        
+        {/* Search Bar */}
+        <div className="relative w-full max-w-md">
+          <div className="relative">
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by patient name, email, phone, or reason..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Filters */}
       <div className="mb-4 flex gap-2">
@@ -87,8 +171,10 @@ const Appointments = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6">
-        {appointments.length === 0 ? (
-          <p className="text-gray-600">No appointments found</p>
+        {filteredAppointments.length === 0 ? (
+          <p className="text-gray-600">
+            {searchQuery.trim() ? `No appointments found matching "${searchQuery}"` : 'No appointments found'}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -103,7 +189,7 @@ const Appointments = () => {
                 </tr>
               </thead>
               <tbody>
-                {appointments.map((appointment) => (
+                {filteredAppointments.map((appointment) => (
                   <tr key={appointment._id} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-4">
                       {new Date(appointment.appointmentDate).toLocaleDateString()}
@@ -162,6 +248,14 @@ const Appointments = () => {
                             className="text-primary-500 hover:text-primary-700 text-sm font-semibold flex items-center gap-1"
                           >
                             <FaClipboardList /> Add Record
+                          </button>
+                        )}
+                        {(appointment.status === APPOINTMENT_STATUS.PENDING || appointment.status === APPOINTMENT_STATUS.CONFIRMED) && (
+                          <button
+                            onClick={() => handleCancelClick(appointment)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors text-sm font-medium"
+                          >
+                            <FaTimes /> Cancel
                           </button>
                         )}
                       </div>
@@ -339,6 +433,75 @@ const Appointments = () => {
                   <p>No medical history recorded for this patient.</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Appointment Modal */}
+      {cancelModal.show && cancelModal.appointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-fadeIn">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <FaExclamationTriangle className="text-3xl text-red-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800">Cancel Appointment</h2>
+              </div>
+              <button
+                onClick={() => setCancelModal({ show: false, appointment: null, reason: '' })}
+                className="text-gray-500 hover:text-gray-700"
+                disabled={cancelling}
+              >
+                <FaTimes className="text-xl" />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-gray-700 mb-2">
+                Are you sure you want to cancel this appointment?
+              </p>
+              <div className="bg-gray-50 p-3 rounded-lg mb-4">
+                <p className="text-sm text-gray-600">
+                  <strong>Patient:</strong> {cancelModal.appointment.patient?.name}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Date:</strong> {new Date(cancelModal.appointment.appointmentDate).toLocaleDateString()}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Time:</strong> {cancelModal.appointment.appointmentTime}
+                </p>
+              </div>
+              
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Reason for Cancellation <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={cancelModal.reason}
+                onChange={(e) => setCancelModal({ ...cancelModal, reason: e.target.value })}
+                placeholder="Please provide a reason for cancellation..."
+                rows="4"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
+                disabled={cancelling}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCancelModal({ show: false, appointment: null, reason: '' })}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                disabled={cancelling}
+              >
+                Keep Appointment
+              </button>
+              <button
+                onClick={handleCancelAppointment}
+                disabled={cancelling || !cancelModal.reason.trim()}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
+              </button>
             </div>
           </div>
         </div>

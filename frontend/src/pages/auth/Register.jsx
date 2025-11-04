@@ -1,26 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const Register = () => {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    middleName: '',
-    surname: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    role: 'patient',
-    phone: '',
-    dateOfBirth: '',
-    gender: 'male'
+  // Load form data from sessionStorage on mount
+  const loadSavedData = () => {
+    const savedData = sessionStorage.getItem('registerFormData');
+    if (savedData) {
+      try {
+        return JSON.parse(savedData);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const [formData, setFormData] = useState(() => {
+    const saved = loadSavedData();
+    return saved || {
+      firstName: '',
+      middleName: '',
+      surname: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      role: 'patient',
+      phone: '',
+      dateOfBirth: '',
+      gender: 'male'
+    };
   });
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  // Save form data to sessionStorage whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem('registerFormData', JSON.stringify(formData));
+  }, [formData]);
 
   const handleChange = (e) => {
     setFormData({
@@ -32,11 +52,6 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
-    if (!acceptedTerms) {
-      setError('You must accept the Terms and Conditions and Privacy Policy to continue');
-      return;
-    }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
@@ -61,6 +76,10 @@ const Register = () => {
       }
       
       await register({ ...registerData, name });
+      
+      // Clear saved form data after successful registration
+      sessionStorage.removeItem('registerFormData');
+      
       const user = JSON.parse(localStorage.getItem('user'));
       
       // Redirect based on role
@@ -68,11 +87,20 @@ const Register = () => {
         navigate('/admin/dashboard');
       } else if (user.role === 'doctor') {
         navigate('/doctor/dashboard');
+      } else if (user.role === 'nurse') {
+        navigate('/nurse/dashboard');
       } else {
         navigate('/patient/dashboard');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed');
+      console.error('Registration error:', err);
+      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+        setError('Cannot connect to server. Please make sure the backend server is running on port 5000.');
+      } else if (err.response) {
+        setError(err.response?.data?.message || 'Registration failed');
+      } else {
+        setError(err.message || 'Registration failed. Please check your connection.');
+      }
     } finally {
       setLoading(false);
     }
@@ -199,6 +227,7 @@ const Register = () => {
               >
                 <option value="patient">Patient</option>
                 <option value="doctor">Doctor</option>
+                <option value="nurse">Nurse</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -250,36 +279,9 @@ const Register = () => {
             </div>
           </div>
 
-          <div className="mb-4">
-            <label className="flex items-start cursor-pointer">
-              <input
-                type="checkbox"
-                checked={acceptedTerms}
-                onChange={(e) => setAcceptedTerms(e.target.checked)}
-                className="mt-1 mr-3 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">
-                I accept the{' '}
-                <Link 
-                  to="/terms" 
-                  className="text-primary-600 hover:text-primary-800 font-semibold underline"
-                >
-                  Terms and Conditions
-                </Link>
-                {' '}and{' '}
-                <Link 
-                  to="/privacy"
-                  className="text-primary-600 hover:text-primary-800 font-semibold underline"
-                >
-                  Privacy Policy
-                </Link>
-              </span>
-            </label>
-          </div>
-
           <button
             type="submit"
-            disabled={loading || !acceptedTerms}
+            disabled={loading}
             className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed mt-4"
           >
             {loading ? 'Creating Account...' : 'Create Account'}
@@ -294,6 +296,19 @@ const Register = () => {
             </p>
           </div>
         </form>
+        
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <p className="text-xs text-center text-gray-500">
+            By registering, you agree to our{' '}
+            <Link to="/terms" className="text-primary-600 hover:text-primary-800 font-semibold">
+              Terms and Conditions
+            </Link>
+            {' '}and{' '}
+            <Link to="/privacy" className="text-primary-600 hover:text-primary-800 font-semibold">
+              Privacy Policy
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

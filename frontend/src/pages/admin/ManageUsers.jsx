@@ -1,22 +1,38 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FaUser, FaEye, FaEdit, FaTrash, FaUserMd, FaPhone, FaCalendar, FaMapMarkerAlt } from 'react-icons/fa';
 import adminService from '../../services/adminService';
 import { USER_ROLES } from '../../utils/constants';
 
 const ManageUsers = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState([]);
-  const [filterRole, setFilterRole] = useState('');
+  const [filterRole, setFilterRole] = useState(searchParams.get('role') || '');
+  const [filterActive, setFilterActive] = useState(searchParams.get('isActive') === 'true' ? true : undefined);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
+    // Read URL parameters on mount
+    const roleParam = searchParams.get('role');
+    const activeParam = searchParams.get('isActive');
+    
+    if (roleParam) {
+      setFilterRole(roleParam);
+    }
+    if (activeParam === 'true') {
+      setFilterActive(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     fetchUsers();
-  }, [filterRole]);
+  }, [filterRole, filterActive]);
 
   const fetchUsers = async () => {
     try {
-      const response = await adminService.getUsers(filterRole);
+      const response = await adminService.getUsers(filterRole, filterActive);
       setUsers(response.users);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -112,7 +128,10 @@ const ManageUsers = () => {
       {/* Filters */}
       <div className="mb-4 flex gap-2">
         <button
-          onClick={() => setFilterRole('')}
+          onClick={() => {
+            setFilterRole('');
+            setSearchParams({});
+          }}
           className={`px-4 py-2 rounded-lg ${
             filterRole === '' ? 'bg-primary-600 text-white' : 'bg-white'
           }`}
@@ -120,7 +139,10 @@ const ManageUsers = () => {
           All
         </button>
         <button
-          onClick={() => setFilterRole(USER_ROLES.PATIENT)}
+          onClick={() => {
+            setFilterRole(USER_ROLES.PATIENT);
+            setSearchParams({ role: USER_ROLES.PATIENT });
+          }}
           className={`px-4 py-2 rounded-lg ${
             filterRole === USER_ROLES.PATIENT ? 'bg-primary-600 text-white' : 'bg-white'
           }`}
@@ -128,7 +150,10 @@ const ManageUsers = () => {
           Patients
         </button>
         <button
-          onClick={() => setFilterRole(USER_ROLES.DOCTOR)}
+          onClick={() => {
+            setFilterRole(USER_ROLES.DOCTOR);
+            setSearchParams({ role: USER_ROLES.DOCTOR });
+          }}
           className={`px-4 py-2 rounded-lg ${
             filterRole === USER_ROLES.DOCTOR ? 'bg-primary-600 text-white' : 'bg-white'
           }`}
@@ -136,7 +161,10 @@ const ManageUsers = () => {
           Doctors
         </button>
         <button
-          onClick={() => setFilterRole(USER_ROLES.ADMIN)}
+          onClick={() => {
+            setFilterRole(USER_ROLES.ADMIN);
+            setSearchParams({ role: USER_ROLES.ADMIN });
+          }}
           className={`px-4 py-2 rounded-lg ${
             filterRole === USER_ROLES.ADMIN ? 'bg-primary-600 text-white' : 'bg-white'
           }`}

@@ -2,6 +2,8 @@ import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import User from '../models/User.js';
 import { logActivity } from '../services/loggingService.js';
+import { assignQueueNumber } from '../services/queueService.js';
+import { emitQueueUpdate } from '../utils/socketEmitter.js';
 
 // @desc    Get doctor dashboard stats
 // @route   GET /api/doctor/dashboard
@@ -92,6 +94,52 @@ export const updateAppointmentStatus = async (req, res) => {
     if (notes) appointment.notes = notes;
 
     await appointment.save();
+
+    // Populate appointment data for notifications
+    await appointment.populate('patient', 'name email phone');
+    await appointment.populate('doctor', 'name specialization');
+
+    // Auto-assign queue number if appointment is confirmed and date is today
+    if (status === 'confirmed') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const appointmentDate = new Date(appointment.appointmentDate);
+      appointmentDate.setHours(0, 0, 0, 0);
+
+      if (appointmentDate.getTime() === today.getTime() && !appointment.queueNumber) {
+        try {
+          const updatedAppointment = await assignQueueNumber(appointment._id);
+          await updatedAppointment.populate('patient', 'name email phone');
+          await updatedAppointment.populate('doctor', 'name');
+          
+          // Emit socket event
+          emitQueueUpdate('queue-number-assigned', {
+            appointmentId: updatedAppointment._id,
+            patientId: updatedAppointment.patient._id || updatedAppointment.patient,
+            queueNumber: updatedAppointment.queueNumber,
+            appointment: updatedAppointment
+          });
+        } catch (error) {
+          console.error('Error auto-assigning queue:', error);
+          // Don't fail the request if queue assignment fails
+        }
+      }
+
+      // Emit appointment confirmed event to notify patient
+      emitQueueUpdate('appointment-confirmed', {
+        appointmentId: appointment._id,
+        patientId: appointment.patient._id || appointment.patient,
+        appointment: {
+          _id: appointment._id,
+          appointmentDate: appointment.appointmentDate,
+          appointmentTime: appointment.appointmentTime,
+          reason: appointment.reason,
+          doctor: appointment.doctor,
+          status: appointment.status,
+          queueNumber: appointment.queueNumber
+        }
+      });
+    }
 
     // Log activity
     await logActivity(req.user.id, 'update_appointment_status', 'appointment', 

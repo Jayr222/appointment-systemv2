@@ -18,6 +18,7 @@ export const RoleProvider = ({ children }) => {
   const isAdmin = user?.role === USER_ROLES.ADMIN;
   const isDoctor = user?.role === USER_ROLES.DOCTOR;
   const isPatient = user?.role === USER_ROLES.PATIENT;
+  const isNurse = user?.role === USER_ROLES.NURSE;
 
   const hasRole = (roles) => {
     return roles.includes(user?.role);
@@ -27,6 +28,7 @@ export const RoleProvider = ({ children }) => {
     isAdmin,
     isDoctor,
     isPatient,
+    isNurse,
     hasRole,
     userRole: user?.role
   };

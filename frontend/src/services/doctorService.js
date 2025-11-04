@@ -36,6 +36,14 @@ export const doctorService = {
   createMedicalRecord: async (recordData) => {
     const response = await api.post('/doctor/medical-records', recordData);
     return response.data;
+  },
+
+  cancelAppointment: async (appointmentId, reason) => {
+    const response = await api.put(`/doctor/appointments/${appointmentId}/status`, {
+      status: 'cancelled',
+      notes: reason
+    });
+    return response.data;
   }
 };
 

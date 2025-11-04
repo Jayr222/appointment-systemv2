@@ -225,7 +225,7 @@ const Records = () => {
                   </h3>
                   <div className="space-y-3">
                     {selectedRecord.investigations.map((test, index) => (
-                      <div key={index} className="bg-green-50 p-4 rounded border border-green-200">
+                      <div key={index} className="p-4 rounded border" style={{ backgroundColor: '#e8f2ed', borderColor: '#a3cbb7' }}>
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="font-bold text-gray-800">{test.testName}</p>

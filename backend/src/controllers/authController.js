@@ -94,7 +94,17 @@ export const getMe = async (req, res) => {
     const user = await User.findById(req.user.id);
     res.json({
       success: true,
-      user
+      user: {
+        id: user._id,
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        dateOfBirth: user.dateOfBirth,
+        gender: user.gender,
+        address: user.address
+      }
     });
   } catch (error) {
     console.error('Get user error:', error);

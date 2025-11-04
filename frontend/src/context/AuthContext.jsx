@@ -17,12 +17,48 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Check if user is logged in on mount
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-    setLoading(false);
+    // Check if user is logged in on mount and validate token
+    const validateAuth = async () => {
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
+      
+      // First, set user from localStorage immediately so user stays logged in during validation
+      if (token && userData) {
+        try {
+          const parsedUser = JSON.parse(userData);
+          setUser(parsedUser);
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+      
+      // Then validate token in the background (don't block UI)
+      if (token && userData) {
+        try {
+          // Verify token is still valid by calling /auth/me
+          const response = await authService.getMe();
+          setUser(response.user);
+          // Update stored user data
+          localStorage.setItem('user', JSON.stringify(response.user));
+        } catch (error) {
+          // Only logout on actual 401 (unauthorized), not on network errors
+          if (error.response?.status === 401) {
+            // Token is invalid or expired - clear auth data
+            console.error('Token validation failed - unauthorized:', error);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+          } else {
+            // Network error or other issue - keep user logged in with cached data
+            console.warn('Token validation failed (network error) - keeping user logged in:', error.message);
+          }
+        }
+      }
+      
+      setLoading(false);
+    };
+
+    validateAuth();
   }, []);
 
   const login = async (email, password) => {

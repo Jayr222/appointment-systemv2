@@ -1,26 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { FaCalendarAlt, FaClock, FaUser, FaUserMd } from 'react-icons/fa';
+import { FaCalendarAlt, FaClock, FaUser, FaUserMd, FaSearch } from 'react-icons/fa';
 import adminService from '../../services/adminService';
 import { APPOINTMENT_STATUS_COLORS, APPOINTMENT_STATUS } from '../../utils/constants';
 
 const AppointmentRequests = () => {
   const [appointments, setAppointments] = useState([]);
+  const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchAppointments();
-  }, [filterStatus]);
+  }, []);
 
   const fetchAppointments = async () => {
     try {
       const response = await adminService.getAppointmentRequests();
-      // Filter by status if selected
-      let filtered = response.appointments;
-      if (filterStatus) {
-        filtered = response.appointments.filter(apt => apt.status === filterStatus);
-      }
-      setAppointments(filtered);
+      setAppointments(response.appointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);
     } finally {
@@ -28,21 +25,67 @@ const AppointmentRequests = () => {
     }
   };
 
+  useEffect(() => {
+    let filtered = appointments;
+    
+    // Filter by status
+    if (filterStatus) {
+      filtered = filtered.filter(apt => apt.status === filterStatus);
+    }
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(appointment => {
+        const patientName = appointment.patient?.name || '';
+        const patientEmail = appointment.patient?.email || '';
+        const doctorName = appointment.doctor?.name || '';
+        const doctorSpecialization = appointment.doctor?.specialization || '';
+        const reason = appointment.reason || '';
+        const query = searchQuery.toLowerCase();
+        return patientName.toLowerCase().includes(query) ||
+               patientEmail.toLowerCase().includes(query) ||
+               doctorName.toLowerCase().includes(query) ||
+               doctorSpecialization.toLowerCase().includes(query) ||
+               reason.toLowerCase().includes(query);
+      });
+    }
+    
+    setFilteredAppointments(filtered);
+  }, [searchQuery, filterStatus, appointments]);
+
   if (loading) {
     return <div className="text-center py-8">Loading...</div>;
   }
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">All Appointments</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">All Appointments</h1>
+        
+        {/* Search Bar */}
+        <div className="relative w-full max-w-md">
+          <div className="relative">
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by patient, doctor, or reason..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-md p-4 border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm">Total Appointments</p>
-              <p className="text-3xl font-bold text-primary-500">{appointments.length}</p>
+              <p className="text-gray-600 text-sm">
+                {searchQuery.trim() || filterStatus ? 'Filtered Results' : 'Total Appointments'}
+              </p>
+              <p className="text-3xl font-bold text-primary-500">{filteredAppointments.length}</p>
             </div>
             <FaCalendarAlt className="text-3xl text-primary-400" />
           </div>
@@ -52,7 +95,7 @@ const AppointmentRequests = () => {
             <div>
               <p className="text-gray-600 text-sm">Pending</p>
               <p className="text-3xl font-bold text-yellow-500">
-                {appointments.filter(apt => apt.status === 'pending').length}
+                {filteredAppointments.filter(apt => apt.status === 'pending').length}
               </p>
             </div>
             <FaClock className="text-3xl text-yellow-400" />
@@ -63,7 +106,7 @@ const AppointmentRequests = () => {
             <div>
               <p className="text-gray-600 text-sm">Confirmed</p>
               <p className="text-3xl font-bold text-blue-500">
-                {appointments.filter(apt => apt.status === 'confirmed').length}
+                {filteredAppointments.filter(apt => apt.status === 'confirmed').length}
               </p>
             </div>
             <FaCalendarAlt className="text-3xl text-blue-400" />
@@ -74,7 +117,7 @@ const AppointmentRequests = () => {
             <div>
               <p className="text-gray-600 text-sm">Completed</p>
               <p className="text-3xl font-bold text-green-500">
-                {appointments.filter(apt => apt.status === 'completed').length}
+                {filteredAppointments.filter(apt => apt.status === 'completed').length}
               </p>
             </div>
             <FaCalendarAlt className="text-3xl text-green-400" />
@@ -119,8 +162,10 @@ const AppointmentRequests = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6 border">
-        {appointments.length === 0 ? (
-          <p className="text-gray-600">No appointments found</p>
+        {filteredAppointments.length === 0 ? (
+          <p className="text-gray-600">
+            {searchQuery.trim() || filterStatus ? `No appointments found matching your criteria` : 'No appointments found'}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -135,7 +180,7 @@ const AppointmentRequests = () => {
                 </tr>
               </thead>
               <tbody>
-                {appointments.map((appointment) => (
+                {filteredAppointments.map((appointment) => (
                   <tr key={appointment._id} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-4">
                       {new Date(appointment.appointmentDate).toLocaleDateString()}

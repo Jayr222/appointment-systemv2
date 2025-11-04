@@ -170,6 +170,41 @@ export const getAppointmentRequests = async (req, res) => {
   }
 };
 
+// @desc    Get all appointments
+// @route   GET /api/admin/appointments
+// @access  Private/Admin
+export const getAllAppointments = async (req, res) => {
+  try {
+    const { status, date } = req.query;
+    let query = {};
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (date) {
+      const dateStart = new Date(date);
+      dateStart.setHours(0, 0, 0, 0);
+      const dateEnd = new Date(date);
+      dateEnd.setHours(23, 59, 59, 999);
+      query.appointmentDate = { $gte: dateStart, $lte: dateEnd };
+    }
+
+    const appointments = await Appointment.find(query)
+      .populate('patient', 'name email phone')
+      .populate('doctor', 'name specialization')
+      .sort({ appointmentDate: 1 });
+
+    res.json({
+      success: true,
+      appointments
+    });
+  } catch (error) {
+    console.error('Get all appointments error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // @desc    Get system logs
 // @route   GET /api/admin/logs
 // @access  Private/Admin

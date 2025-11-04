@@ -209,9 +209,12 @@ const PrivacyPolicy = () => {
           </div>
 
           {/* Footer */}
-          <div className="mt-12 pt-8 border-t text-center">
-            <Link to="/login" className="text-primary-600 hover:text-primary-800 font-semibold">
-              ← Back to Login
+          <div className="mt-12 pt-8 border-t text-center space-y-3">
+            <Link to="/register" className="text-primary-600 hover:text-primary-800 font-semibold block">
+              ← Back to Register
+            </Link>
+            <Link to="/login" className="text-gray-600 hover:text-gray-800 text-sm">
+              Back to Login
             </Link>
           </div>
         </div>

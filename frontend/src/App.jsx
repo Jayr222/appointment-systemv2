@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { RoleProvider } from './context/RoleContext';
+import { NotificationProvider } from './context/NotificationContext';
 import ProtectedRoute from './components/shared/ProtectedRoute';
 import { USER_ROLES } from './utils/constants';
 
@@ -9,6 +10,7 @@ import { USER_ROLES } from './utils/constants';
 import PatientLayout from './layouts/PatientLayout';
 import DoctorLayout from './layouts/DoctorLayout';
 import AdminLayout from './layouts/AdminLayout';
+import NurseLayout from './layouts/NurseLayout';
 
 // Auth Pages
 import Login from './pages/auth/Login';
@@ -36,6 +38,13 @@ import AppointmentRequests from './pages/admin/AppointmentRequests';
 import SystemLogs from './pages/admin/SystemLogs';
 import DoctorVerifications from './pages/admin/DoctorVerifications';
 
+// Nurse Pages
+import NurseDashboard from './pages/nurse/Dashboard';
+import NurseQueue from './pages/nurse/Queue';
+import VitalSigns from './pages/nurse/VitalSigns';
+import FollowUps from './pages/nurse/FollowUps';
+import NurseProfile from './pages/nurse/Profile';
+
 // Public Pages
 import TermsAndConditions from './pages/TermsAndConditions.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
@@ -48,7 +57,8 @@ function App() {
     <Router>
       <AuthProvider>
         <RoleProvider>
-          <Routes>
+          <NotificationProvider>
+            <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -205,10 +215,63 @@ function App() {
               }
             />
 
+            {/* Nurse Routes */}
+            <Route
+              path="/nurse/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.NURSE]}>
+                  <NurseLayout>
+                    <NurseDashboard />
+                  </NurseLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/nurse/queue"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.NURSE]}>
+                  <NurseLayout>
+                    <NurseQueue />
+                  </NurseLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/nurse/vital-signs"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.NURSE]}>
+                  <NurseLayout>
+                    <VitalSigns />
+                  </NurseLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/nurse/follow-ups"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.NURSE]}>
+                  <NurseLayout>
+                    <FollowUps />
+                  </NurseLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/nurse/profile"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.NURSE]}>
+                  <NurseLayout>
+                    <NurseProfile />
+                  </NurseLayout>
+                </ProtectedRoute>
+              }
+            />
+
             {/* Default Route */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
+          </NotificationProvider>
         </RoleProvider>
       </AuthProvider>
     </Router>

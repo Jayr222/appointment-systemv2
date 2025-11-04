@@ -6,6 +6,7 @@ import {
   updateUser,
   deleteUser,
   getAppointmentRequests,
+  getAllAppointments,
   getSystemLogs
 } from '../controllers/adminController.js';
 import {
@@ -23,6 +24,7 @@ router.get('/users/:id', adminOnly, getUserById);
 router.put('/users/:id', adminOnly, updateUser);
 router.delete('/users/:id', adminOnly, deleteUser);
 router.get('/appointment-requests', adminOnly, getAppointmentRequests);
+router.get('/appointments', adminOnly, getAllAppointments);
 router.get('/logs', adminOnly, getSystemLogs);
 
 // Doctor verification routes

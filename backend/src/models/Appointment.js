@@ -64,10 +64,40 @@ const appointmentSchema = new mongoose.Schema({
   },
   cancellationReason: {
     type: String
+  },
+  // Queue Number System
+  queueNumber: {
+    type: Number,
+    default: null
+  },
+  queueDate: {
+    type: Date,
+    default: null
+  },
+  queueStatus: {
+    type: String,
+    enum: ['waiting', 'called', 'in-progress', 'served', 'skipped'],
+    default: 'waiting'
+  },
+  checkedInAt: {
+    type: Date,
+    default: null
+  },
+  calledAt: {
+    type: Date,
+    default: null
+  },
+  servedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
 });
+
+// Index for efficient queue queries
+appointmentSchema.index({ queueDate: 1, queueNumber: 1 });
+appointmentSchema.index({ queueStatus: 1 });
 
 export default mongoose.model('Appointment', appointmentSchema);
 

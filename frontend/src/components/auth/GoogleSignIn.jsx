@@ -30,6 +30,8 @@ const GoogleSignIn = () => {
           navigate('/admin/dashboard');
         } else if (data.user.role === 'doctor') {
           navigate('/doctor/dashboard');
+        } else if (data.user.role === 'nurse') {
+          navigate('/nurse/dashboard');
         } else {
           navigate('/patient/dashboard');
         }

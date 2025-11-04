@@ -35,6 +35,15 @@ export const adminService = {
     return response.data;
   },
 
+  getAllAppointments: async (status, date) => {
+    const params = {};
+    if (status) params.status = status;
+    if (date) params.date = date;
+    
+    const response = await api.get('/admin/appointments', { params });
+    return response.data;
+  },
+
   getSystemLogs: async (limit = 100) => {
     const response = await api.get('/admin/logs', { params: { limit } });
     return response.data;
