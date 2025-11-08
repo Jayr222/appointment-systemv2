@@ -92,29 +92,32 @@ export const getConversations = async (req, res) => {
     const userId = req.user.id;
 
     // Get all unique conversations
-    const messages = await Message.find({
+    const rawMessages = await Message.find({
       $or: [{ sender: userId }, { receiver: userId }]
     })
       .populate('sender', 'name email role specialization avatar')
       .populate('receiver', 'name email role specialization avatar')
       .sort({ createdAt: -1 });
 
+    // Filter out messages with missing sender/receiver (e.g., deleted users)
+    const messages = rawMessages.filter(msg => msg?.sender && msg?.receiver);
+
     // Group by conversation partner
     const conversationsMap = new Map();
 
     messages.forEach(msg => {
-      const partnerId = msg.sender._id.toString() === userId 
-        ? msg.receiver._id.toString() 
-        : msg.sender._id.toString();
-      
-      const partner = msg.sender._id.toString() === userId 
-        ? msg.receiver 
-        : msg.sender;
+      const isSenderCurrentUser = msg.sender._id.toString() === userId;
+      const partner = isSenderCurrentUser ? msg.receiver : msg.sender;
+      if (!partner) {
+        return;
+      }
+
+      const partnerId = partner._id.toString();
 
       if (!conversationsMap.has(partnerId)) {
-        const unreadCount = messages.filter(m => 
-          m.receiver._id.toString() === userId &&
-          m.sender._id.toString() === partnerId &&
+        const unreadCount = messages.filter(m =>
+          m.receiver?._id?.toString() === userId &&
+          m.sender?._id?.toString() === partnerId &&
           !m.isRead
         ).length;
 
@@ -127,9 +130,9 @@ export const getConversations = async (req, res) => {
       } else {
         const existing = conversationsMap.get(partnerId);
         if (msg.createdAt > existing.lastMessageTime) {
-          const unreadCount = messages.filter(m => 
-            m.receiver._id.toString() === userId &&
-            m.sender._id.toString() === partnerId &&
+          const unreadCount = messages.filter(m =>
+            m.receiver?._id?.toString() === userId &&
+            m.sender?._id?.toString() === partnerId &&
             !m.isRead
           ).length;
 

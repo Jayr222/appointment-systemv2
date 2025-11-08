@@ -895,7 +895,7 @@ export const confirmPatientArrival = async (req, res) => {
   try {
     const { doctorId, convertToToday } = req.body;
 
-    const appointment = await Appointment.findById(req.params.id)
+    let appointment = await Appointment.findById(req.params.id)
       .populate('patient', 'name email')
       .populate('doctor', 'name specialization');
 
@@ -948,17 +948,20 @@ export const confirmPatientArrival = async (req, res) => {
       }
     }
 
+    await appointment.save();
+
     // Assign queue number for today
     try {
       const { assignQueueNumber } = await import('../services/queueService.js');
-      await assignQueueNumber(appointment._id);
+      appointment = await assignQueueNumber(appointment._id);
       await appointment.populate('patient', 'name email');
       await appointment.populate('doctor', 'name specialization');
     } catch (error) {
       console.error('Error assigning queue number:', error);
+      appointment = await Appointment.findById(appointment._id)
+        .populate('patient', 'name email')
+        .populate('doctor', 'name specialization');
     }
-
-    await appointment.save();
 
     await logActivity(
       req.user.id,

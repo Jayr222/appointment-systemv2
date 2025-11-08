@@ -130,6 +130,10 @@ export const updateStatus = async (req, res) => {
 
     const appointment = await updateQueueStatus(appointmentId, status, req.user?.id);
 
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
     // Log activity
     if (req.user) {
       await logActivity(req.user.id, 'update_queue_status', 'appointment', 
@@ -138,20 +142,20 @@ export const updateStatus = async (req, res) => {
 
     // Emit socket event
     emitQueueUpdate('queue-status-changed', {
-      appointmentId: appointment._id,
-      patientId: appointment.patient._id || appointment.patient,
-      queueNumber: appointment.queueNumber,
-      status: appointment.queueStatus,
-      appointment: appointment
+      appointmentId: appointment?._id,
+      patientId: appointment?.patient?._id || appointment?.patient,
+      queueNumber: appointment?.queueNumber,
+      status: appointment?.queueStatus,
+      appointment
     });
 
     // If status is 'called', also emit patient-called event to trigger ringing
     if (status === 'called') {
       emitQueueUpdate('patient-called', {
-        appointmentId: appointment._id,
-        patientId: appointment.patient._id || appointment.patient,
-        queueNumber: appointment.queueNumber,
-        appointment: appointment
+        appointmentId: appointment?._id,
+        patientId: appointment?.patient?._id || appointment?.patient,
+        queueNumber: appointment?.queueNumber,
+        appointment
       });
     }
 

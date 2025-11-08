@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import User from '../models/User.js';
@@ -244,8 +245,43 @@ export const createMedicalRecord = async (req, res) => {
       followUpDate
     } = req.body;
 
+    let patientId = patient;
+    let appointmentDoc = null;
+
+    if (appointment) {
+      if (!mongoose.Types.ObjectId.isValid(appointment)) {
+        return res.status(400).json({ message: 'Invalid appointment selected' });
+      }
+
+      appointmentDoc = await Appointment.findById(appointment).select('patient doctor');
+      if (!appointmentDoc) {
+        return res.status(404).json({ message: 'Appointment not found' });
+      }
+
+      if (String(appointmentDoc.doctor) !== String(req.user.id)) {
+        return res.status(403).json({ message: 'You are not assigned to this appointment' });
+      }
+
+      if (!patientId && appointmentDoc.patient) {
+        patientId = appointmentDoc.patient.toString();
+      }
+    }
+
+    if (!patientId) {
+      return res.status(400).json({ message: 'Patient is required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(patientId)) {
+      return res.status(400).json({ message: 'Invalid patient selected' });
+    }
+
+    const patientExists = await User.exists({ _id: patientId, role: 'patient' });
+    if (!patientExists) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
+
     const medicalRecord = await MedicalRecord.create({
-      patient,
+      patient: patientId,
       doctor: req.user.id,
       appointment,
       vitalSigns,
@@ -261,16 +297,16 @@ export const createMedicalRecord = async (req, res) => {
     });
 
     // If linked to an appointment, mark it as completed and served in queue
-    if (appointment) {
+    if (appointmentDoc) {
       await Appointment.findByIdAndUpdate(
-        appointment,
+        appointmentDoc._id,
         { status: 'completed', queueStatus: 'served', servedAt: new Date() }
       );
     }
 
     // Optionally notify patient with a summary via in-app message
     const shouldNotify = req.body?.sendToPatient !== false;
-    if (shouldNotify && patient) {
+    if (shouldNotify && patientId) {
       try {
         const summaryLines = [];
         if (chiefComplaint) summaryLines.push(`Chief Complaint: ${chiefComplaint}`);
@@ -294,19 +330,19 @@ export const createMedicalRecord = async (req, res) => {
 
         const msg = await Message.create({
           sender: req.user.id,
-          receiver: patient,
+          receiver: patientId,
           subject: 'Visit Summary',
           content,
-          appointment: appointment || null,
+          appointment: appointmentDoc?._id || appointment || null,
           messageType: 'appointment'
         });
-        emitNotification(patient, {
+        emitNotification(patientId, {
           type: 'new_message',
           title: 'Visit Summary',
           message: 'Your visit summary is available.',
           data: { messageId: msg._id }
         });
-        emitNewMessage(patient, { message: msg.toObject(), sender: req.user.name || 'Doctor' });
+        emitNewMessage(patientId, { message: msg.toObject(), sender: req.user.name || 'Doctor' });
       } catch (e) {
         console.error('Failed to send visit summary message:', e);
       }
@@ -314,7 +350,7 @@ export const createMedicalRecord = async (req, res) => {
 
     // Log activity
     await logActivity(req.user.id, 'create_medical_record', 'medical_record', 
-      `Created medical record for patient ${patient}`);
+      `Created medical record for patient ${patientId}`);
 
     res.status(201).json({
       success: true,

@@ -186,6 +186,16 @@ function App() {
               }
             />
             <Route
+              path="/doctor/medical-records"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.DOCTOR]}>
+                  <DoctorLayout>
+                    <PatientRecordView />
+                  </DoctorLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/doctor/add-medical-record"
               element={
                 <ProtectedRoute allowedRoles={[USER_ROLES.DOCTOR]}>
