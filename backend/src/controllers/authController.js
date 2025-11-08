@@ -1,16 +1,33 @@
+import crypto from 'crypto';
+import speakeasy from 'speakeasy';
+import QRCode from 'qrcode';
 import User from '../models/User.js';
 import { generateToken } from '../utils/generateToken.js';
 import { logActivity, logError } from '../services/loggingService.js';
+import { noteFailedLogin, resetLoginAttempts } from '../middleware/rateLimiter.js';
+import { sendPasswordResetEmail } from '../services/emailService.js';
 
 // @desc    Register user
 // @route   POST /api/auth/register
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role, phone, dateOfBirth, gender, address } = req.body;
+    const { name, email, password, phone, dateOfBirth, gender, address } = req.body;
+
+    if (!email?.trim()) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    if (!phone?.trim()) {
+      return res.status(400).json({ message: 'Phone number is required' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone = phone.trim();
+    const role = 'patient';
 
     // Check if user exists
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({ email: normalizedEmail, isDeleted: { $ne: true } });
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -18,17 +35,20 @@ export const register = async (req, res) => {
     // Create user
     const user = await User.create({
       name,
-      email,
+      email: normalizedEmail,
       password,
       role,
-      phone,
+      phone: normalizedPhone,
       dateOfBirth,
       gender,
       address
     });
 
-    // Log activity
-    await logActivity(user._id, 'register', 'auth', `User registered as ${role}`);
+    // Log activity (don't block registration if logging fails)
+    logActivity(user._id, 'register', 'auth', `User registered as ${role}`).catch(err => {
+      console.error('Failed to log registration activity:', err);
+      // Don't throw - logging is non-critical
+    });
 
     res.status(201).json({
       success: true,
@@ -56,18 +76,79 @@ export const login = async (req, res) => {
     // Check for user email
     const user = await User.findOne({ email }).select('+password');
 
-    if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user) {
+      const attemptInfo = noteFailedLogin(req);
+      return res.status(401).json({
+        message: 'Invalid credentials',
+        attemptsRemaining: attemptInfo.remaining
+      });
+    }
+
+    if (user.isDeleted) {
+      return res.status(403).json({ message: 'Account has been deleted. Please contact an administrator for assistance.' });
+    }
+
+    // Check if account is locked
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      const lockTime = Math.ceil((user.lockUntil.getTime() - Date.now()) / 1000 / 60);
+      return res.status(423).json({ 
+        message: `Account locked due to too many failed login attempts. Please try again in ${lockTime} minute(s).`,
+        lockUntil: user.lockUntil
+      });
+    }
+
+    // Check if user has a password (Google-authenticated users might not)
+    if (!user.password) {
+      const attemptInfo = noteFailedLogin(req);
+      return res.status(401).json({ 
+        message: 'This account uses Google Sign-In. Please use the Google Sign-In button instead.',
+        attemptsRemaining: attemptInfo.remaining
+      });
+    }
+
+    // Check password
+    const isMatch = await user.matchPassword(password);
+    
+    if (!isMatch) {
+      // Increment login attempts (per-user and per-IP)
+      await user.incLoginAttempts();
+      const attemptInfo = noteFailedLogin(req);
+      
+      // Check if account should be locked now
+      const updatedUser = await User.findById(user._id);
+      if (updatedUser.lockUntil && updatedUser.lockUntil > Date.now()) {
+        const lockTime = Math.ceil((updatedUser.lockUntil.getTime() - Date.now()) / 1000 / 60);
+        return res.status(423).json({ 
+          message: `Account locked due to too many failed login attempts. Please try again in ${lockTime} minute(s).`,
+          lockUntil: updatedUser.lockUntil,
+          attemptsRemaining: 0
+        });
+      }
+      
+      // Calculate remaining attempts (5 max attempts, already incremented)
+      const currentAttempts = updatedUser.loginAttempts || 1;
+      const remainingAttempts = Math.max(0, 5 - currentAttempts);
+      return res.status(401).json({ 
+        message: 'Invalid credentials',
+        attemptsRemaining: Math.min(remainingAttempts, attemptInfo.remaining)
+      });
     }
 
     if (!user.isActive) {
       return res.status(401).json({ message: 'Account is inactive' });
     }
 
-    // Log activity
-    await logActivity(user._id, 'login', 'auth', 'User logged in', {
+    // Reset login attempts on successful login (per-user and per-IP)
+    await user.resetLoginAttempts();
+    resetLoginAttempts(req);
+
+    // Log activity (don't block login if logging fails)
+    logActivity(user._id, 'login', 'auth', 'User logged in', {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent']
+    }).catch(err => {
+      console.error('Failed to log login activity:', err);
+      // Don't throw - logging is non-critical
     });
 
     res.json({
@@ -82,7 +163,11 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Login error stack:', error.stack);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -103,7 +188,14 @@ export const getMe = async (req, res) => {
         phone: user.phone,
         dateOfBirth: user.dateOfBirth,
         gender: user.gender,
-        address: user.address
+        address: user.address,
+        googleConnected: !!user.googleId,
+        googleEmail: user.googleEmail,
+        googleConnectedAt: user.googleConnectedAt,
+        authProvider: user.authProvider,
+        twoFactorEnabled: user.twoFactorEnabled || false,
+        lastPasswordChange: user.lastPasswordChange,
+        lastEmailChange: user.lastEmailChange
       }
     });
   } catch (error) {
@@ -143,6 +235,54 @@ export const updateProfile = async (req, res) => {
   }
 };
 
+// @desc    Upload avatar
+// @route   POST /api/auth/avatar
+// @access  Private
+export const uploadAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete old avatar if exists and it's not a URL
+    if (user.avatar && !user.avatar.startsWith('http')) {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const { fileURLToPath } = await import('url');
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      
+      const oldAvatarPath = path.join(__dirname, '../../uploads/avatars/', user.avatar);
+      try {
+        await fs.unlink(oldAvatarPath);
+      } catch (error) {
+        console.error('Error deleting old avatar:', error);
+      }
+    }
+
+    // Update user with new avatar filename
+    user.avatar = req.file.filename;
+    await user.save();
+
+    // Log activity
+    await logActivity(user._id, 'upload_avatar', 'auth', 'Avatar uploaded');
+
+    res.json({
+      success: true,
+      avatar: `/uploads/avatars/${req.file.filename}`,
+      user
+    });
+  } catch (error) {
+    console.error('Upload avatar error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // @desc    Change password
 // @route   PUT /api/auth/change-password
 // @access  Private
@@ -156,7 +296,23 @@ export const changePassword = async (req, res) => {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
+    // Check cooldown period (1 month = 30 days)
+    if (user.lastPasswordChange) {
+      const daysSinceLastChange = (Date.now() - user.lastPasswordChange.getTime()) / (1000 * 60 * 60 * 24);
+      const daysRemaining = 30 - daysSinceLastChange;
+      
+      if (daysRemaining > 0) {
+        const days = Math.ceil(daysRemaining);
+        return res.status(429).json({ 
+          message: `You can change your password again in ${days} day${days !== 1 ? 's' : ''}. Please wait before changing your password again.`,
+          daysRemaining: days,
+          canChangeAfter: new Date(user.lastPasswordChange.getTime() + 30 * 24 * 60 * 60 * 1000)
+        });
+      }
+    }
+
     user.password = newPassword;
+    user.lastPasswordChange = new Date();
     await user.save();
 
     // Log activity
@@ -164,10 +320,332 @@ export const changePassword = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Password changed successfully'
+      message: 'Password changed successfully. You can change it again after 30 days.'
     });
   } catch (error) {
     console.error('Change password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Forgot password - send reset email
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email });
+
+    // Don't reveal if user exists or not for security
+    if (!user) {
+      return res.status(200).json({ 
+        message: 'If an account with that email exists, a password reset link has been sent.' 
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+    const resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+
+    user.resetPasswordToken = resetPasswordToken;
+    user.resetPasswordExpire = resetPasswordExpire;
+    await user.save({ validateBeforeSave: false });
+
+    // Send email
+    try {
+      const emailSent = await sendPasswordResetEmail(user.email, resetToken);
+      
+      if (emailSent) {
+        res.status(200).json({ 
+          message: 'If an account with that email exists, a password reset link has been sent.' 
+        });
+      } else {
+        // Reset token fields if email fails
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpire = undefined;
+        await user.save({ validateBeforeSave: false });
+        
+        res.status(500).json({ message: 'Email could not be sent. Please try again later.' });
+      }
+    } catch (emailError) {
+      // Reset token fields if email fails
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+      
+      console.error('Email sending error:', emailError);
+      res.status(500).json({ message: 'Email could not be sent. Please try again later.' });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Reset password with token
+// @route   PUT /api/auth/reset-password/:token
+// @access  Public
+export const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    // Hash token to compare with stored token
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    // Find user with valid token
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    // Set new password
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Change email
+// @route   PUT /api/auth/change-email
+// @access  Private
+export const changeEmail = async (req, res) => {
+  try {
+    const { newEmail, password } = req.body;
+
+    if (!newEmail || !password) {
+      return res.status(400).json({ message: 'New email and password are required' });
+    }
+
+    const user = await User.findById(req.user.id).select('+password');
+
+    // Verify current password
+    if (!(await user.matchPassword(password))) {
+      return res.status(401).json({ message: 'Password is incorrect' });
+    }
+
+    // Check cooldown period (1 month = 30 days)
+    if (user.lastEmailChange) {
+      const daysSinceLastChange = (Date.now() - user.lastEmailChange.getTime()) / (1000 * 60 * 60 * 24);
+      const daysRemaining = 30 - daysSinceLastChange;
+      
+      if (daysRemaining > 0) {
+        const days = Math.ceil(daysRemaining);
+        return res.status(429).json({ 
+          message: `You can change your email again in ${days} day${days !== 1 ? 's' : ''}. Please wait before changing your email again.`,
+          daysRemaining: days,
+          canChangeAfter: new Date(user.lastEmailChange.getTime() + 30 * 24 * 60 * 60 * 1000)
+        });
+      }
+    }
+
+    // Check if email already exists
+    const emailExists = await User.findOne({ email: newEmail.toLowerCase() });
+    if (emailExists && emailExists._id.toString() !== user._id.toString()) {
+      return res.status(400).json({ message: 'Email already in use' });
+    }
+
+    // Update email
+    user.email = newEmail.toLowerCase();
+    user.lastEmailChange = new Date();
+    await user.save();
+
+    // Log activity
+    await logActivity(user._id, 'change_email', 'auth', 'Email changed');
+
+    res.json({
+      success: true,
+      message: 'Email changed successfully. You can change it again after 30 days.',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Change email error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Change phone number
+// @route   PUT /api/auth/change-phone
+// @access  Private
+export const changePhone = async (req, res) => {
+  try {
+    const { newPhone, password } = req.body;
+
+    if (!newPhone || !password) {
+      return res.status(400).json({ message: 'New phone number and password are required' });
+    }
+
+    const user = await User.findById(req.user.id).select('+password');
+
+    // Verify current password
+    if (!(await user.matchPassword(password))) {
+      return res.status(401).json({ message: 'Password is incorrect' });
+    }
+
+    // Update phone
+    user.phone = newPhone;
+    await user.save();
+
+    // Log activity
+    await logActivity(user._id, 'change_phone', 'auth', 'Phone number changed');
+
+    res.json({
+      success: true,
+      message: 'Phone number changed successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Change phone error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Generate 2FA secret
+// @route   POST /api/auth/2fa/setup
+// @access  Private
+export const setup2FA = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    const secret = speakeasy.generateSecret({
+      name: `${user.name || user.email} (Healthcare System)`,
+      issuer: 'Healthcare System'
+    });
+
+    // Generate QR code data URL
+    const qrCodeDataUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+    // Store secret temporarily (don't enable yet)
+    user.twoFactorSecret = secret.base32;
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      success: true,
+      secret: secret.base32,
+      qrCode: qrCodeDataUrl,
+      manualEntryKey: secret.base32
+    });
+  } catch (error) {
+    console.error('2FA setup error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Verify and enable 2FA
+// @route   POST /api/auth/2fa/verify
+// @access  Private
+export const verify2FA = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    const user = await User.findById(req.user.id).select('+twoFactorSecret');
+
+    if (!user.twoFactorSecret) {
+      return res.status(400).json({ message: '2FA not set up. Please set up 2FA first.' });
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: token
+    });
+
+    if (!verified) {
+      return res.status(400).json({ message: 'Invalid verification code' });
+    }
+
+    // Generate backup codes
+    const backupCodes = [];
+    for (let i = 0; i < 10; i++) {
+      backupCodes.push(Math.random().toString(36).substring(2, 10).toUpperCase());
+    }
+
+    user.twoFactorEnabled = true;
+    user.twoFactorBackupCodes = backupCodes;
+    await user.save({ validateBeforeSave: false });
+
+    // Log activity
+    await logActivity(user._id, 'enable_2fa', 'auth', 'Two-factor authentication enabled');
+
+    res.json({
+      success: true,
+      message: '2FA enabled successfully',
+      backupCodes: backupCodes
+    });
+  } catch (error) {
+    console.error('2FA verify error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Disable 2FA
+// @route   POST /api/auth/2fa/disable
+// @access  Private
+export const disable2FA = async (req, res) => {
+  try {
+    const { password } = req.body;
+
+    const user = await User.findById(req.user.id).select('+password');
+
+    // Verify password
+    if (!(await user.matchPassword(password))) {
+      return res.status(401).json({ message: 'Password is incorrect' });
+    }
+
+    user.twoFactorEnabled = false;
+    user.twoFactorSecret = undefined;
+    user.twoFactorBackupCodes = [];
+    await user.save({ validateBeforeSave: false });
+
+    // Log activity
+    await logActivity(user._id, 'disable_2fa', 'auth', 'Two-factor authentication disabled');
+
+    res.json({
+      success: true,
+      message: '2FA disabled successfully'
+    });
+  } catch (error) {
+    console.error('2FA disable error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   FaHeartbeat, FaHospital, FaStethoscope, FaNotesMedical, 
-  FaSearch, FaPills, FaFlask, FaCalendarAlt, FaUserMd 
+  FaSearch, FaPills, FaFlask, FaCalendarAlt, FaDownload 
 } from 'react-icons/fa';
 import patientService from '../../services/patientService';
 
@@ -9,6 +9,8 @@ const Records = () => {
   const [records, setRecords] = useState([]);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
 
   useEffect(() => {
     const fetchRecords = async () => {
@@ -24,6 +26,39 @@ const Records = () => {
 
     fetchRecords();
   }, []);
+
+  useEffect(() => {
+    setDownloadError('');
+  }, [selectedRecord]);
+
+  const handleDownloadRecord = async () => {
+    if (!selectedRecord?._id) return;
+    setDownloading(true);
+    setDownloadError('');
+
+    try {
+      const blobData = await patientService.downloadMedicalRecordDocx(selectedRecord._id);
+      const blob = new Blob([blobData], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const visitDate = new Date(selectedRecord.createdAt).toISOString().split('T')[0];
+      const doctorName = selectedRecord.doctor?.name || 'doctor';
+      const safeDoctorName = doctorName.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      link.href = url;
+      link.download = `visit-summary-${safeDoctorName}-${visitDate}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading medical record:', error);
+      setDownloadError('Failed to download visit summary. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return <div className="text-center py-8">Loading...</div>;
@@ -83,9 +118,25 @@ const Records = () => {
                       {new Date(selectedRecord.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right space-y-2">
                     <p className="font-semibold text-gray-800">Dr. {selectedRecord.doctor?.name}</p>
                     <p className="text-sm text-gray-600">{selectedRecord.doctor?.specialization || 'General Medicine'}</p>
+                    <button
+                      type="button"
+                      onClick={handleDownloadRecord}
+                      disabled={downloading}
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition ${
+                        downloading
+                          ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                          : 'bg-primary-600 text-white hover:bg-primary-700'
+                      }`}
+                    >
+                      <FaDownload />
+                      {downloading ? 'Preparing...' : 'Download DOCX'}
+                    </button>
+                    {downloadError && (
+                      <p className="text-sm text-red-500">{downloadError}</p>
+                    )}
                   </div>
                 </div>
               </div>

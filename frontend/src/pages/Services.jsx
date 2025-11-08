@@ -2,46 +2,73 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { FaStethoscope, FaUserMd, FaFileMedical, FaSyringe, FaHeartbeat, FaProcedures } from 'react-icons/fa';
 import AppBar from '../components/shared/AppBar';
+import { useSiteContent } from '../context/SiteContentContext';
 
 const Services = () => {
-  const services = [
+  const { content, loading } = useSiteContent();
+  
+  const iconMap = {
+    'FaStethoscope': FaStethoscope,
+    'FaFileMedical': FaFileMedical,
+    'FaUserMd': FaUserMd,
+    'FaSyringe': FaSyringe,
+    'FaHeartbeat': FaHeartbeat,
+    'FaProcedures': FaProcedures
+  };
+
+  const defaultServices = [
     {
-      icon: FaStethoscope,
+      icon: 'FaStethoscope',
       title: 'General Consultation',
       description: 'Comprehensive medical consultations with licensed doctors for various health concerns and conditions.',
       color: 'bg-blue-100 text-blue-600'
     },
     {
-      icon: FaFileMedical,
+      icon: 'FaFileMedical',
       title: 'Medical Records Management',
       description: 'Secure digital storage and management of your medical history and health records.',
       color: 'bg-green-100 text-green-600'
     },
     {
-      icon: FaUserMd,
+      icon: 'FaUserMd',
       title: 'Specialist Referrals',
       description: 'Referrals to specialized medical professionals for advanced treatment and care.',
       color: 'bg-purple-100 text-purple-600'
     },
     {
-      icon: FaSyringe,
+      icon: 'FaSyringe',
       title: 'Vaccinations',
       description: 'Immunization services including routine vaccines and preventive care shots.',
       color: 'bg-yellow-100 text-yellow-600'
     },
     {
-      icon: FaHeartbeat,
+      icon: 'FaHeartbeat',
       title: 'Health Check-ups',
       description: 'Regular health screenings and check-ups to monitor your overall wellness.',
       color: 'bg-red-100 text-red-600'
     },
     {
-      icon: FaProcedures,
+      icon: 'FaProcedures',
       title: 'Appointment Booking',
       description: 'Easy online appointment scheduling with your preferred healthcare provider.',
       color: 'bg-indigo-100 text-indigo-600'
     }
   ];
+
+  const services = content?.services && content.services.length > 0 
+    ? content.services 
+    : defaultServices;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <AppBar />
+        <div className="pt-20 pb-12 flex items-center justify-center">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -57,10 +84,12 @@ const Services = () => {
           {/* Services Grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             {services.map((service, index) => {
-              const Icon = service.icon;
+              const Icon = typeof service.icon === 'string' 
+                ? iconMap[service.icon] || FaStethoscope 
+                : service.icon || FaStethoscope;
               return (
                 <div key={index} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-                  <div className={`${service.color} rounded-full w-16 h-16 flex items-center justify-center mb-4`}>
+                  <div className={`${service.color || 'bg-blue-100 text-blue-600'} rounded-full w-16 h-16 flex items-center justify-center mb-4`}>
                     <Icon className="text-2xl" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-800 mb-2">{service.title}</h3>

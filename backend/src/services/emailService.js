@@ -60,6 +60,31 @@ export const sendAppointmentReminder = async (email, appointmentDetails) => {
   }
 };
 
+export const sendAppointmentCancellation = async (email, appointmentDetails) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Appointment Cancelled',
+      html: `
+        <h2>Appointment Cancelled</h2>
+        <p>Your appointment has been cancelled.</p>
+        <p><strong>Date:</strong> ${appointmentDetails.date}</p>
+        <p><strong>Time:</strong> ${appointmentDetails.time}</p>
+        <p><strong>Doctor:</strong> ${appointmentDetails.doctorName}</p>
+        ${appointmentDetails.reason ? `<p><strong>Reason:</strong> ${appointmentDetails.reason}</p>` : ''}
+        <p>If this was a mistake, please book a new appointment.</p>
+      `
+    };
+    
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Email sending error:', error);
+    return false;
+  }
+};
+
 export const sendPasswordResetEmail = async (email, resetToken) => {
   try {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;

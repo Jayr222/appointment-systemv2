@@ -16,7 +16,8 @@ const AppointmentRequests = () => {
 
   const fetchAppointments = async () => {
     try {
-      const response = await adminService.getAppointmentRequests();
+      // Fetch all appointments (all statuses); filtering is applied client-side
+      const response = await adminService.getAllAppointments();
       setAppointments(response.appointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);

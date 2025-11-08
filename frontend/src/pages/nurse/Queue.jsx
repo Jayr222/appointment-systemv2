@@ -4,6 +4,7 @@ import { FaUser, FaClock, FaHeartbeat, FaStethoscope } from 'react-icons/fa';
 import nurseService from '../../services/nurseService';
 import QueueDisplay from '../../components/shared/QueueDisplay';
 import { useNotifications } from '../../context/NotificationContext';
+import { formatNameForPrivacy } from '../../utils/constants';
 
 const Queue = () => {
   const [appointments, setAppointments] = useState([]);
@@ -95,7 +96,7 @@ const Queue = () => {
                     </td>
                     <td className="py-3 px-4">
                       <div>
-                        <p className="font-semibold">{appointment.patient?.name}</p>
+                        <p className="font-semibold">{formatNameForPrivacy(appointment.patient?.name)}</p>
                         <p className="text-sm text-gray-600">{appointment.patient?.phone || appointment.patient?.email}</p>
                       </div>
                     </td>

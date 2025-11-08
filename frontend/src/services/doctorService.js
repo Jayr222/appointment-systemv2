@@ -33,6 +33,34 @@ export const doctorService = {
     return response.data;
   },
 
+  getAssignedPatients: async () => {
+    const response = await api.get('/doctor/patient-documents/patients');
+    return response.data;
+  },
+
+  getPatientDocuments: async (patientId, documentType) => {
+    const params = {};
+    if (patientId) params.patientId = patientId;
+    if (documentType) params.documentType = documentType;
+
+    const response = await api.get('/doctor/patient-documents', { params });
+    return response.data;
+  },
+
+  uploadPatientDocument: async (formData) => {
+    const response = await api.post('/doctor/patient-documents', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
+  deletePatientDocument: async (documentId) => {
+    const response = await api.delete(`/doctor/patient-documents/${documentId}`);
+    return response.data;
+  },
+
   createMedicalRecord: async (recordData) => {
     const response = await api.post('/doctor/medical-records', recordData);
     return response.data;

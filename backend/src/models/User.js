@@ -22,6 +22,14 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true
   },
+  googleEmail: {
+    type: String,
+    lowercase: true,
+    trim: true
+  },
+  googleConnectedAt: {
+    type: Date
+  },
   authProvider: {
     type: String,
     enum: ['local', 'google'],
@@ -150,10 +158,31 @@ const userSchema = new mongoose.Schema({
   },
   avatar: {
     type: String
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+  deletedAt: {
+    type: Date
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  loginAttempts: {
+    type: Number,
+    default: 0
+  },
+  lockUntil: {
+    type: Date
   }
 }, {
   timestamps: true
 });
+
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCK_TIME_MS = 60 * 1000; // 1 minute
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
@@ -169,6 +198,30 @@ userSchema.pre('save', async function(next) {
 // Match password method
 userSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+userSchema.methods.incLoginAttempts = async function() {
+  // If lock has expired, reset attempts
+  if (this.lockUntil && this.lockUntil < Date.now()) {
+    this.loginAttempts = 0;
+    this.lockUntil = undefined;
+  }
+
+  this.loginAttempts = (this.loginAttempts || 0) + 1;
+
+  if (this.loginAttempts >= MAX_LOGIN_ATTEMPTS && (!this.lockUntil || this.lockUntil < Date.now())) {
+    this.lockUntil = new Date(Date.now() + LOCK_TIME_MS);
+  }
+
+  await this.save({ validateBeforeSave: false });
+  return this;
+};
+
+userSchema.methods.resetLoginAttempts = async function() {
+  this.loginAttempts = 0;
+  this.lockUntil = undefined;
+  await this.save({ validateBeforeSave: false });
+  return this;
 };
 
 export default mongoose.model('User', userSchema);

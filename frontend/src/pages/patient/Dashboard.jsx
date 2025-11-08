@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { FaCalendarAlt, FaClock, FaClipboardList, FaCheckCircle, FaSearch, FaUserMd, FaTimes, FaExclamationTriangle } from 'react-icons/fa';
 import patientService from '../../services/patientService';
+import queueService from '../../services/queueService';
 import { APPOINTMENT_STATUS_COLORS } from '../../utils/constants';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from '../../context/NotificationContext';
 import AppointmentCalendar from '../../components/shared/AppointmentCalendarSimple';
+import QueueDisplay from '../../components/shared/QueueDisplay';
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -20,8 +22,10 @@ const Dashboard = () => {
   const [doctors, setDoctors] = useState([]);
   const [cancelModal, setCancelModal] = useState({ show: false, appointment: null, reason: '' });
   const [cancelling, setCancelling] = useState(false);
+  const [patientQueue, setPatientQueue] = useState(null);
+  const [queueLoading, setQueueLoading] = useState(true);
   const { user } = useAuth();
-  const { addNotification } = useNotifications();
+  const { addNotification, startContinuousRinging, stopContinuousRinging } = useNotifications();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -44,6 +48,51 @@ const Dashboard = () => {
 
     fetchData();
   }, []);
+
+  // Fetch patient's queue data immediately
+  useEffect(() => {
+    const fetchPatientQueue = async () => {
+      if (!user) {
+        setQueueLoading(false);
+        return;
+      }
+
+      try {
+        setQueueLoading(true);
+        // Get today's queue and filter for current patient
+        const response = await queueService.getTodayQueue();
+        const allQueue = response.queue || [];
+        
+        // Find patient's appointments in queue
+        const userId = user?.id || user?._id;
+        const patientQueueItems = allQueue.filter(
+          appointment => String(appointment.patient?._id || appointment.patient) === String(userId)
+        );
+        
+        // Also check if patient has upcoming appointments that should be in queue
+        if (patientQueueItems.length === 0) {
+          // Check if there are confirmed appointments today that should have queue numbers
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          
+          // This will be handled by the QueueDisplay component which shows all queue
+          // But we can set a flag here
+          setPatientQueue([]);
+        } else {
+          setPatientQueue(patientQueueItems);
+        }
+      } catch (error) {
+        console.error('Error fetching patient queue:', error);
+        setPatientQueue([]);
+      } finally {
+        setQueueLoading(false);
+      }
+    };
+
+    fetchPatientQueue();
+  }, [user]);
 
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -79,6 +128,84 @@ const Dashboard = () => {
         userId: userId,
         doctorId: null
       });
+    });
+
+    // Listen for queue updates
+    socket.on('queue-updated', (data) => {
+      console.log('Queue updated event received:', data);
+      // Refresh queue data
+      if (user) {
+        queueService.getTodayQueue().then(response => {
+          const allQueue = response.queue || [];
+          const userId = user?.id || user?._id;
+          const patientQueueItems = allQueue.filter(
+            appointment => String(appointment.patient?._id || appointment.patient) === String(userId)
+          );
+          setPatientQueue(patientQueueItems);
+        }).catch(err => console.error('Error refreshing queue:', err));
+      }
+    });
+
+    // Listen for queue number assignment
+    socket.on('queue-number-assigned', (data) => {
+      console.log('Queue number assigned event received:', data);
+      const userId = String(user?.id || user?._id || '');
+      const eventPatientId = String(data.patientId || '');
+      
+      if (userId === eventPatientId || String(userId) === String(eventPatientId)) {
+        // Refresh queue data
+        queueService.getTodayQueue().then(response => {
+          const allQueue = response.queue || [];
+          const patientQueueItems = allQueue.filter(
+            appointment => String(appointment.patient?._id || appointment.patient) === String(userId)
+          );
+          setPatientQueue(patientQueueItems);
+        }).catch(err => console.error('Error refreshing queue:', err));
+      }
+    });
+
+    // Listen for queue status changes
+    socket.on('queue-status-changed', (data) => {
+      console.log('Queue status changed event received:', data);
+      const userId = String(user?.id || user?._id || '');
+      const eventPatientId = String(data.patientId || '');
+      
+      if (userId === eventPatientId || String(userId) === String(eventPatientId)) {
+        // Stop continuous ringing when status changes from 'called' to 'in-progress', 'served', or 'skipped'
+        if (data.status === 'in-progress' || data.status === 'served' || data.status === 'skipped') {
+          stopContinuousRinging();
+        }
+        
+        // Refresh queue data
+        queueService.getTodayQueue().then(response => {
+          const allQueue = response.queue || [];
+          const patientQueueItems = allQueue.filter(
+            appointment => String(appointment.patient?._id || appointment.patient) === String(userId)
+          );
+          setPatientQueue(patientQueueItems);
+        }).catch(err => console.error('Error refreshing queue:', err));
+      }
+    });
+
+    // Listen for patient called
+    socket.on('patient-called', (data) => {
+      console.log('Patient called event received:', data);
+      const userId = String(user?.id || user?._id || '');
+      const eventPatientId = String(data.patientId || '');
+      
+      if (userId === eventPatientId || String(userId) === String(eventPatientId)) {
+        // Start continuous ringing for patient
+        startContinuousRinging();
+        
+        // Refresh queue data
+        queueService.getTodayQueue().then(response => {
+          const allQueue = response.queue || [];
+          const patientQueueItems = allQueue.filter(
+            appointment => String(appointment.patient?._id || appointment.patient) === String(userId)
+          );
+          setPatientQueue(patientQueueItems);
+        }).catch(err => console.error('Error refreshing queue:', err));
+      }
     });
 
     // Listen for appointment confirmation
@@ -118,6 +245,15 @@ const Dashboard = () => {
           queueNumber: data.appointment.queueNumber,
           showBrowserNotification: true
         });
+
+        // Refresh queue data when appointment is confirmed
+        queueService.getTodayQueue().then(response => {
+          const allQueue = response.queue || [];
+          const patientQueueItems = allQueue.filter(
+            appointment => String(appointment.patient?._id || appointment.patient) === String(userId)
+          );
+          setPatientQueue(patientQueueItems);
+        }).catch(err => console.error('Error refreshing queue:', err));
 
         // Show confirmation banner
         setConfirmationMessage({
@@ -321,6 +457,11 @@ const Dashboard = () => {
             <FaClipboardList className="text-4xl text-primary-400" />
           </div>
         </Link>
+      </div>
+
+      {/* Patient Queue Display - Dynamic and Real-time */}
+      <div className="mb-8">
+        <QueueDisplay doctorId={null} showControls={false} />
       </div>
 
       {/* Appointment Calendar */}

@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { RoleProvider } from './context/RoleContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { SiteContentProvider } from './context/SiteContentContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { SidebarProvider } from './context/SidebarContext';
 import ProtectedRoute from './components/shared/ProtectedRoute';
 import { USER_ROLES } from './utils/constants';
 
@@ -16,12 +19,14 @@ import NurseLayout from './layouts/NurseLayout';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 
 // Patient Pages
 import PatientDashboard from './pages/patient/Dashboard';
 import BookAppointment from './pages/patient/BookAppointment';
 import Records from './pages/patient/Records';
 import PatientProfile from './pages/patient/Profile';
+import PatientMessages from './pages/patient/Messages';
 
 // Doctor Pages
 import DoctorDashboard from './pages/doctor/Dashboard';
@@ -30,13 +35,17 @@ import ScheduleManagement from './pages/doctor/ScheduleManagement';
 import PatientRecordView from './pages/doctor/PatientRecordView';
 import AddMedicalRecord from './pages/doctor/AddMedicalRecord';
 import DoctorProfile from './pages/doctor/Profile';
+import DoctorMessages from './pages/doctor/Messages';
+import DoctorPatientDocuments from './pages/doctor/PatientDocuments';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
 import ManageUsers from './pages/admin/ManageUsers';
 import AppointmentRequests from './pages/admin/AppointmentRequests';
+import PatientArrivals from './pages/admin/PatientArrivals';
 import SystemLogs from './pages/admin/SystemLogs';
 import DoctorVerifications from './pages/admin/DoctorVerifications';
+import Reports from './pages/admin/Reports';
 
 // Nurse Pages
 import NurseDashboard from './pages/nurse/Dashboard';
@@ -55,14 +64,18 @@ import Contact from './pages/Contact.jsx';
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <RoleProvider>
-          <NotificationProvider>
-            <Routes>
+      <ThemeProvider>
+        <SidebarProvider>
+          <SiteContentProvider>
+            <AuthProvider>
+              <RoleProvider>
+                <NotificationProvider>
+              <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/terms" element={<TermsAndConditions />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/about" element={<About />} />
@@ -96,6 +109,16 @@ function App() {
                 <ProtectedRoute allowedRoles={[USER_ROLES.PATIENT]}>
                   <PatientLayout>
                     <Records />
+                  </PatientLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patient/messages"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.PATIENT]}>
+                  <PatientLayout>
+                    <PatientMessages />
                   </PatientLayout>
                 </ProtectedRoute>
               }
@@ -138,6 +161,26 @@ function App() {
                 <ProtectedRoute allowedRoles={[USER_ROLES.DOCTOR]}>
                   <DoctorLayout>
                     <ScheduleManagement />
+                  </DoctorLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/doctor/patient-documents"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.DOCTOR]}>
+                  <DoctorLayout>
+                    <DoctorPatientDocuments />
+                  </DoctorLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/doctor/messages"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.DOCTOR]}>
+                  <DoctorLayout>
+                    <DoctorMessages />
                   </DoctorLayout>
                 </ProtectedRoute>
               }
@@ -190,6 +233,26 @@ function App() {
                 <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
                   <AdminLayout>
                     <AppointmentRequests />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/patient-arrivals"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+                  <AdminLayout>
+                    <PatientArrivals />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/reports"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+                  <AdminLayout>
+                    <Reports />
                   </AdminLayout>
                 </ProtectedRoute>
               }
@@ -270,10 +333,13 @@ function App() {
             {/* Default Route */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-          </NotificationProvider>
-        </RoleProvider>
-      </AuthProvider>
+              </Routes>
+                </NotificationProvider>
+              </RoleProvider>
+            </AuthProvider>
+          </SiteContentProvider>
+        </SidebarProvider>
+      </ThemeProvider>
     </Router>
   );
 }

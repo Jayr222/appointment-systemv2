@@ -26,6 +26,64 @@ export const getTodayQueueList = async (req, res) => {
   }
 };
 
+// @desc    Update priority/visit type of an appointment in queue
+// @route   PUT /api/queue/:appointmentId/priority
+// @access  Private
+export const updatePriority = async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const { priorityLevel, visitType } = req.body;
+
+    const allowedPriority = ['regular', 'priority', 'emergency'];
+    const allowedVisit = ['booking', 'walk-in'];
+
+    const update = {};
+    if (priorityLevel) {
+      if (!allowedPriority.includes(priorityLevel)) {
+        return res.status(400).json({ message: 'Invalid priority level' });
+      }
+      update.priorityLevel = priorityLevel;
+    }
+    if (visitType) {
+      if (!allowedVisit.includes(visitType)) {
+        return res.status(400).json({ message: 'Invalid visit type' });
+      }
+      update.visitType = visitType;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ message: 'No valid fields to update' });
+    }
+
+    const appointment = await Appointment.findByIdAndUpdate(
+      appointmentId,
+      update,
+      { new: true }
+    )
+      .populate('patient', 'name email phone')
+      .populate('doctor', 'name');
+
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    // Log activity
+    if (req.user) {
+      await logActivity(req.user.id, 'update_queue_priority', 'appointment',
+        `Updated appointment to priority=${appointment.priorityLevel}, visitType=${appointment.visitType}`);
+    }
+
+    // Emit queue updated for real-time refresh
+    const queue = await getTodayQueue(null);
+    emitQueueUpdate('queue-updated', { queue });
+
+    res.json({ success: true, appointment });
+  } catch (error) {
+    console.error('Update priority error:', error);
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
 // @desc    Assign queue number to appointment
 // @route   POST /api/queue/assign/:appointmentId
 // @access  Private
@@ -86,6 +144,16 @@ export const updateStatus = async (req, res) => {
       status: appointment.queueStatus,
       appointment: appointment
     });
+
+    // If status is 'called', also emit patient-called event to trigger ringing
+    if (status === 'called') {
+      emitQueueUpdate('patient-called', {
+        appointmentId: appointment._id,
+        patientId: appointment.patient._id || appointment.patient,
+        queueNumber: appointment.queueNumber,
+        appointment: appointment
+      });
+    }
 
     // Also emit general queue update
     const queue = await getTodayQueue(null);

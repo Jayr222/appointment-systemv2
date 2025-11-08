@@ -14,6 +14,9 @@ import doctorRoutes from './routes/doctorRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import nurseRoutes from './routes/nurseRoutes.js';
 import queueRoutes from './routes/queueRoutes.js';
+import siteContentRoutes from './routes/siteContentRoutes.js';
+import doctorAvailabilityRoutes from './routes/doctorAvailabilityRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
 
 // Connect to database
 connectDB();
@@ -41,6 +44,16 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Trust proxy for accurate IP addresses (if behind reverse proxy)
+app.set('trust proxy', 1);
+
+// Serve static files (avatars and uploads)
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+app.use('/uploads', express.static(join(__dirname, '../uploads')));
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/google', googleAuthRoutes);
@@ -49,6 +62,9 @@ app.use('/api/doctor', doctorRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/nurse', nurseRoutes);
 app.use('/api/queue', queueRoutes);
+app.use('/api/site-content', siteContentRoutes);
+app.use('/api/doctor/availability', doctorAvailabilityRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -83,6 +99,15 @@ setIO(io);
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
+
+  // Join user-specific room for messaging
+  socket.on('join-user', (data) => {
+    const { userId } = data;
+    if (userId) {
+      socket.join(`user-${userId}`);
+      console.log(`User ${userId} joined user room`);
+    }
+  });
 
   // Join queue room
   socket.on('join-queue', (data) => {

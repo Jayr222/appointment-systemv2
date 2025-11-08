@@ -70,3 +70,33 @@ export const emitQueueUpdate = (event, data) => {
   }
 };
 
+export const emitNotification = (userId, notification) => {
+  if (!ioInstance) {
+    console.warn('Socket.IO instance not set. Notifications will not be sent.');
+    return;
+  }
+
+  try {
+    // Emit to specific user
+    ioInstance.to(`user-${userId}`).emit('notification', notification);
+    // Also emit to general room
+    ioInstance.emit('notification', { ...notification, userId });
+  } catch (error) {
+    console.error('Error emitting notification:', error);
+  }
+};
+
+export const emitNewMessage = (receiverId, message) => {
+  if (!ioInstance) {
+    console.warn('Socket.IO instance not set. Messages will not be sent in real-time.');
+    return;
+  }
+
+  try {
+    // Emit to specific user
+    ioInstance.to(`user-${receiverId}`).emit('new-message', message);
+  } catch (error) {
+    console.error('Error emitting new message:', error);
+  }
+};
+

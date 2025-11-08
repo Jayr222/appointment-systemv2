@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import NotificationToast from '../components/shared/NotificationToast';
 
 const NotificationContext = createContext();
 
@@ -13,8 +14,9 @@ export const useNotifications = () => {
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const continuousSoundRef = React.useRef(null); // Use ref to avoid dependency issues
 
-  // Play notification sound
+  // Play notification sound (single beep)
   const playNotificationSound = useCallback(() => {
     if (!soundEnabled) return;
 
@@ -39,6 +41,107 @@ export const NotificationProvider = ({ children }) => {
       console.warn('Could not play notification sound:', error);
     }
   }, [soundEnabled]);
+
+  // Stop continuous ringing sound (internal helper)
+  const stopContinuousRingingInternal = useCallback(() => {
+    if (continuousSoundRef.current) {
+      try {
+        if (continuousSoundRef.current.stop) {
+          continuousSoundRef.current.stop();
+        } else {
+          // Fallback for old format
+          if (continuousSoundRef.current.intervalId) {
+            clearInterval(continuousSoundRef.current.intervalId);
+          }
+          if (continuousSoundRef.current.audioContext) {
+            continuousSoundRef.current.audioContext.close();
+          }
+        }
+      } catch (error) {
+        console.warn('Error stopping continuous sound:', error);
+      }
+      continuousSoundRef.current = null;
+    }
+  }, []);
+
+  // Start continuous ringing sound (for patient calls)
+  const startContinuousRinging = useCallback(() => {
+    if (!soundEnabled) return;
+
+    // Stop any existing continuous sound
+    stopContinuousRingingInternal();
+
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Create a function that plays a ring and schedules the next one
+      let intervalId;
+      let isPlaying = true;
+      
+      const playRing = () => {
+        if (!isPlaying) return;
+        
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // Ringing sound - alternating frequency for attention
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.2);
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.4);
+        oscillator.type = 'sine';
+
+        // Ring pattern: sound on for 0.5s, pause for 0.3s, then repeat
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime + 0.45);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+      };
+
+      // Play first ring immediately
+      playRing();
+      
+      // Schedule repeated rings every 0.8 seconds (0.5s sound + 0.3s pause)
+      intervalId = setInterval(() => {
+        if (isPlaying) {
+          playRing();
+        }
+      }, 800);
+
+      // Store reference for stopping
+      continuousSoundRef.current = { 
+        audioContext, 
+        intervalId, 
+        stop: () => { 
+          isPlaying = false; 
+          if (intervalId) clearInterval(intervalId); 
+          try {
+            audioContext.close();
+          } catch (e) {
+            console.warn('Error closing audio context:', e);
+          }
+        } 
+      };
+    } catch (error) {
+      console.warn('Could not start continuous ringing:', error);
+    }
+  }, [soundEnabled, stopContinuousRingingInternal]);
+
+  // Stop continuous ringing sound (public API)
+  const stopContinuousRinging = useCallback(() => {
+    stopContinuousRingingInternal();
+  }, [stopContinuousRingingInternal]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopContinuousRingingInternal();
+    };
+  }, [stopContinuousRingingInternal]);
 
   // Show browser notification
   const showBrowserNotification = useCallback((title, options) => {
@@ -89,13 +192,15 @@ export const NotificationProvider = ({ children }) => {
       title: notification.title,
       message: notification.message,
       queueNumber: notification.queueNumber,
-      timestamp: new Date()
+      timestamp: new Date(),
+      persistent: notification.persistent || false,
+      onAcknowledge: notification.onAcknowledge || null
     };
 
     setNotifications((prev) => [...prev, newNotification]);
 
-    // Play sound
-    if (notification.playSound !== false) {
+    // Play sound (only if continuousSound is not set)
+    if (notification.playSound !== false && !notification.continuousSound) {
       playNotificationSound();
     }
 
@@ -108,14 +213,16 @@ export const NotificationProvider = ({ children }) => {
       showBrowserNotification(notification.title, {
         body: notificationBody,
         tag: `queue-${notification.queueNumber || 'update'}`,
-        requireInteraction: notification.type === 'success' || notification.queueNumber ? true : false
+        requireInteraction: notification.persistent || notification.queueNumber ? true : false
       });
     }
 
-    // Auto-remove after 6 seconds
-    setTimeout(() => {
-      removeNotification(id);
-    }, 6000);
+    // Auto-remove after 6 seconds (unless persistent)
+    if (!notification.persistent) {
+      setTimeout(() => {
+        removeNotification(id);
+      }, 6000);
+    }
   }, [playNotificationSound, showBrowserNotification]);
 
   // Remove notification
@@ -134,7 +241,9 @@ export const NotificationProvider = ({ children }) => {
     removeNotification,
     clearAll,
     soundEnabled,
-    setSoundEnabled
+    setSoundEnabled,
+    startContinuousRinging,
+    stopContinuousRinging
   };
 
   return (

@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import patientService from '../../services/patientService';
-import { FaPlus, FaTimes, FaExclamationTriangle } from 'react-icons/fa';
+import { FaPlus, FaTimes, FaExclamationTriangle, FaCamera, FaUser, FaCalendarAlt, FaClipboardList, FaPhone, FaEnvelope, FaMapMarkerAlt, FaIdCard, FaShieldAlt, FaUserCircle, FaLock, FaKey, FaMobile } from 'react-icons/fa';
+import Avatar from '../../components/shared/Avatar';
+import { Link } from 'react-router-dom';
+import GoogleAccountConnect from '../../components/shared/GoogleAccountConnect';
 
 const Profile = () => {
   const { user, updateProfile } = useAuth();
@@ -12,7 +16,16 @@ const Profile = () => {
     phone: user?.phone || '',
     dateOfBirth: user?.dateOfBirth ? user.dateOfBirth.split('T')[0] : '',
     gender: user?.gender || 'male',
-    address: user?.address || ''
+    address: user?.address || '',
+    emergencyContact: {
+      name: user?.emergencyContact?.name || '',
+      phone: user?.emergencyContact?.phone || '',
+      relationship: user?.emergencyContact?.relationship || ''
+    },
+    insuranceInfo: {
+      provider: user?.insuranceInfo?.provider || '',
+      policyNumber: user?.insuranceInfo?.policyNumber || ''
+    }
   });
   const [medicalHistory, setMedicalHistory] = useState({
     allergies: [],
@@ -31,7 +44,41 @@ const Profile = () => {
   });
   const [loading, setLoading] = useState(false);
   const [medicalLoading, setMedicalLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [stats, setStats] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [emailData, setEmailData] = useState({
+    newEmail: '',
+    password: ''
+  });
+  const [phoneData, setPhoneData] = useState({
+    newPhone: '',
+    password: ''
+  });
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [emailMessage, setEmailMessage] = useState('');
+  const [phoneMessage, setPhoneMessage] = useState('');
+  const [twoFactorData, setTwoFactorData] = useState({
+    qrCode: null,
+    secret: null,
+    verificationCode: '',
+    backupCodes: [],
+    showBackupCodes: false
+  });
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
+  const [twoFactorMessage, setTwoFactorMessage] = useState('');
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(user?.twoFactorEnabled || false);
+  const [passwordCooldown, setPasswordCooldown] = useState(null);
+  const [emailCooldown, setEmailCooldown] = useState(null);
 
   useEffect(() => {
     const fetchMedicalHistory = async () => {
@@ -59,14 +106,106 @@ const Profile = () => {
       }
     };
 
+    const fetchUserData = async () => {
+      try {
+        const response = await authService.getMe();
+        if (response.user) {
+          setUserData(response.user);
+          setTwoFactorEnabled(response.user.twoFactorEnabled || false);
+          
+          // Calculate password cooldown
+          if (response.user.lastPasswordChange) {
+            const daysSince = (Date.now() - new Date(response.user.lastPasswordChange).getTime()) / (1000 * 60 * 60 * 24);
+            const daysRemaining = Math.max(0, 30 - daysSince);
+            if (daysRemaining > 0) {
+              setPasswordCooldown({
+                daysRemaining: Math.ceil(daysRemaining),
+                canChangeAfter: new Date(new Date(response.user.lastPasswordChange).getTime() + 30 * 24 * 60 * 60 * 1000)
+              });
+            } else {
+              setPasswordCooldown(null);
+            }
+          }
+          
+          // Calculate email cooldown
+          if (response.user.lastEmailChange) {
+            const daysSince = (Date.now() - new Date(response.user.lastEmailChange).getTime()) / (1000 * 60 * 60 * 24);
+            const daysRemaining = Math.max(0, 30 - daysSince);
+            if (daysRemaining > 0) {
+              setEmailCooldown({
+                daysRemaining: Math.ceil(daysRemaining),
+                canChangeAfter: new Date(new Date(response.user.lastEmailChange).getTime() + 30 * 24 * 60 * 60 * 1000)
+              });
+            } else {
+              setEmailCooldown(null);
+            }
+          }
+          
+          setFormData({
+            name: response.user.name || '',
+            email: response.user.email || '',
+            phone: response.user.phone || '',
+            dateOfBirth: response.user.dateOfBirth ? response.user.dateOfBirth.split('T')[0] : '',
+            gender: response.user.gender || 'male',
+            address: response.user.address || '',
+            emergencyContact: {
+              name: response.user.emergencyContact?.name || '',
+              phone: response.user.emergencyContact?.phone || '',
+              relationship: response.user.emergencyContact?.relationship || ''
+            },
+            insuranceInfo: {
+              provider: response.user.insuranceInfo?.provider || '',
+              policyNumber: response.user.insuranceInfo?.policyNumber || ''
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    const fetchStats = async () => {
+      try {
+        const response = await patientService.getDashboard();
+        setStats(response.stats);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      }
+    };
+
     fetchMedicalHistory();
+    fetchUserData();
+    fetchStats();
   }, []);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    
+    // Handle nested fields (emergencyContact, insuranceInfo)
+    if (name.startsWith('emergencyContact.')) {
+      const field = name.split('.')[1];
+      setFormData({
+        ...formData,
+        emergencyContact: {
+          ...formData.emergencyContact,
+          [field]: value
+        }
+      });
+    } else if (name.startsWith('insuranceInfo.')) {
+      const field = name.split('.')[1];
+      setFormData({
+        ...formData,
+        insuranceInfo: {
+          ...formData.insuranceInfo,
+          [field]: value
+        }
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
   };
 
   const handleMedicalHistoryChange = (field, value) => {
@@ -181,9 +320,283 @@ const Profile = () => {
     }
   };
 
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setPasswordMessage('');
+    
+    // Check cooldown
+    if (passwordCooldown && passwordCooldown.daysRemaining > 0) {
+      setPasswordMessage(`You can change your password again in ${passwordCooldown.daysRemaining} day${passwordCooldown.daysRemaining !== 1 ? 's' : ''}.`);
+      return;
+    }
+    
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordMessage('New passwords do not match');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      setPasswordMessage('Password must be at least 6 characters long');
+      return;
+    }
+
+    setPasswordLoading(true);
+
+    try {
+      await authService.changePassword(passwordData.currentPassword, passwordData.newPassword);
+      setPasswordMessage('Password changed successfully. You can change it again after 30 days.');
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      // Update cooldown
+      setPasswordCooldown({
+        daysRemaining: 30,
+        canChangeAfter: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      if (error.response?.status === 429) {
+        const daysRemaining = error.response?.data?.daysRemaining || 0;
+        setPasswordCooldown({
+          daysRemaining: daysRemaining,
+          canChangeAfter: error.response?.data?.canChangeAfter ? new Date(error.response.data.canChangeAfter) : null
+        });
+      }
+      setPasswordMessage(error.response?.data?.message || 'Failed to change password. Please check your current password.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleEmailChange = async (e) => {
+    e.preventDefault();
+    setEmailMessage('');
+
+    // Check cooldown
+    if (emailCooldown && emailCooldown.daysRemaining > 0) {
+      setEmailMessage(`You can change your email again in ${emailCooldown.daysRemaining} day${emailCooldown.daysRemaining !== 1 ? 's' : ''}.`);
+      return;
+    }
+
+    if (!emailData.newEmail || !emailData.password) {
+      setEmailMessage('Please fill in all fields');
+      return;
+    }
+
+    setEmailLoading(true);
+
+    try {
+      const response = await authService.changeEmail(emailData.newEmail, emailData.password);
+      setEmailMessage(response.message || 'Email changed successfully. You can change it again after 30 days.');
+      setEmailData({ newEmail: '', password: '' });
+      // Update user in context
+      const updatedUser = JSON.parse(localStorage.getItem('user'));
+      if (updatedUser) {
+        updateProfile({ email: response.user.email });
+      }
+      // Update cooldown
+      setEmailCooldown({
+        daysRemaining: 30,
+        canChangeAfter: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      });
+    } catch (error) {
+      console.error('Error changing email:', error);
+      if (error.response?.status === 429) {
+        const daysRemaining = error.response?.data?.daysRemaining || 0;
+        setEmailCooldown({
+          daysRemaining: daysRemaining,
+          canChangeAfter: error.response?.data?.canChangeAfter ? new Date(error.response.data.canChangeAfter) : null
+        });
+      }
+      setEmailMessage(error.response?.data?.message || 'Failed to change email. Please check your password.');
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handlePhoneChange = async (e) => {
+    e.preventDefault();
+    setPhoneMessage('');
+
+    if (!phoneData.newPhone || !phoneData.password) {
+      setPhoneMessage('Please fill in all fields');
+      return;
+    }
+
+    setPhoneLoading(true);
+
+    try {
+      const response = await authService.changePhone(phoneData.newPhone, phoneData.password);
+      setPhoneMessage(response.message || 'Phone number changed successfully');
+      setPhoneData({ newPhone: '', password: '' });
+      // Update user in context
+      const updatedUser = JSON.parse(localStorage.getItem('user'));
+      if (updatedUser) {
+        updateProfile({ phone: response.user.phone });
+      }
+    } catch (error) {
+      console.error('Error changing phone:', error);
+      setPhoneMessage(error.response?.data?.message || 'Failed to change phone number. Please check your password.');
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const handleSetup2FA = async () => {
+    setTwoFactorLoading(true);
+    setTwoFactorMessage('');
+
+    try {
+      const response = await authService.setup2FA();
+      setTwoFactorData({
+        ...twoFactorData,
+        qrCode: response.qrCode,
+        secret: response.manualEntryKey
+      });
+      setTwoFactorMessage('Scan the QR code with your authenticator app');
+    } catch (error) {
+      console.error('Error setting up 2FA:', error);
+      setTwoFactorMessage(error.response?.data?.message || 'Failed to set up 2FA');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async (e) => {
+    e.preventDefault();
+    setTwoFactorMessage('');
+
+    if (!twoFactorData.verificationCode) {
+      setTwoFactorMessage('Please enter the verification code');
+      return;
+    }
+
+    setTwoFactorLoading(true);
+
+    try {
+      const response = await authService.verify2FA(twoFactorData.verificationCode);
+      setTwoFactorEnabled(true);
+      setTwoFactorData({
+        ...twoFactorData,
+        backupCodes: response.backupCodes || [],
+        showBackupCodes: true,
+        verificationCode: '',
+        qrCode: null,
+        secret: null
+      });
+      setTwoFactorMessage('2FA enabled successfully! Please save your backup codes.');
+    } catch (error) {
+      console.error('Error verifying 2FA:', error);
+      setTwoFactorMessage(error.response?.data?.message || 'Invalid verification code');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const handleDisable2FA = async (e) => {
+    e.preventDefault();
+    setTwoFactorMessage('');
+
+    const password = prompt('Enter your password to disable 2FA:');
+    if (!password) return;
+
+    setTwoFactorLoading(true);
+
+    try {
+      await authService.disable2FA(password);
+      setTwoFactorEnabled(false);
+      setTwoFactorData({
+        qrCode: null,
+        secret: null,
+        verificationCode: '',
+        backupCodes: [],
+        showBackupCodes: false
+      });
+      setTwoFactorMessage('2FA disabled successfully');
+    } catch (error) {
+      console.error('Error disabling 2FA:', error);
+      setTwoFactorMessage(error.response?.data?.message || 'Failed to disable 2FA. Please check your password.');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">My Profile</h1>
+
+      {/* Profile Overview Card */}
+      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-lg shadow-lg p-6 mb-6 text-white">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Avatar user={user} size="2xl" />
+            <div>
+              <h2 className="text-2xl font-bold mb-1">{user?.name || 'User'}</h2>
+              <p className="text-primary-100 flex items-center gap-2 text-sm">
+                <FaEnvelope className="text-xs" />
+                {user?.email}
+              </p>
+              {user?.phone && (
+                <p className="text-primary-100 flex items-center gap-2 mt-1 text-sm">
+                  <FaPhone className="text-xs" />
+                  {user.phone}
+                </p>
+              )}
+            </div>
+          </div>
+          {stats && (
+            <>
+              {/* Desktop Stats */}
+              <div className="hidden md:flex gap-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{stats.totalAppointments || 0}</div>
+                  <div className="text-sm text-primary-100">Total Appointments</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{stats.upcomingAppointments || 0}</div>
+                  <div className="text-sm text-primary-100">Upcoming</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{stats.medicalRecords || 0}</div>
+                  <div className="text-sm text-primary-100">Medical Records</div>
+                </div>
+              </div>
+              {/* Mobile Stats */}
+              <div className="md:hidden grid grid-cols-3 gap-4 pt-4 border-t border-primary-500">
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{stats.totalAppointments || 0}</div>
+                  <div className="text-xs text-primary-100">Appointments</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{stats.upcomingAppointments || 0}</div>
+                  <div className="text-xs text-primary-100">Upcoming</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{stats.medicalRecords || 0}</div>
+                  <div className="text-xs text-primary-100">Records</div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        {/* Quick Actions */}
+        <div className="mt-4 pt-4 border-t border-primary-500 flex flex-wrap gap-2">
+          <Link
+            to="/patient/appointments"
+            className="px-3 py-1.5 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+          >
+            <FaCalendarAlt /> My Appointments
+          </Link>
+          <Link
+            to="/patient/records"
+            className="px-3 py-1.5 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+          >
+            <FaClipboardList /> Medical Records
+          </Link>
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="mb-6 border-b border-gray-200">
@@ -208,6 +621,16 @@ const Profile = () => {
           >
             Medical History
           </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`pb-3 px-4 font-semibold transition-colors ${
+              activeTab === 'settings'
+                ? 'text-primary-600 border-b-2 border-primary-600'
+                : 'text-gray-600 hover:text-primary-600'
+            }`}
+          >
+            Settings
+          </button>
         </div>
       </div>
 
@@ -225,6 +648,51 @@ const Profile = () => {
       {/* Profile Tab */}
       {activeTab === 'profile' && (
       <div className="bg-white rounded-lg shadow-md p-6">
+        {/* Avatar Upload Section */}
+        <div className="mb-6 pb-6 border-b border-gray-200">
+          <label className="block text-gray-700 text-sm font-bold mb-2">
+            Profile Picture
+          </label>
+          <div className="flex items-center gap-4">
+            <Avatar user={user} size="xl" />
+            <div>
+              <input
+                type="file"
+                id="avatar-upload"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    setAvatarLoading(true);
+                    try {
+                      const response = await authService.uploadAvatar(file);
+                      updateProfile({ ...user, avatar: response.user.avatar });
+                      setMessage('Avatar updated successfully');
+                    } catch (error) {
+                      console.error('Error uploading avatar:', error);
+                      setMessage('Failed to upload avatar');
+                    } finally {
+                      setAvatarLoading(false);
+                    }
+                  }
+                }}
+                className="hidden"
+                disabled={avatarLoading}
+              />
+              <label
+                htmlFor="avatar-upload"
+                className={`inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer ${
+                  avatarLoading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                <FaCamera />
+                {avatarLoading ? 'Uploading...' : 'Change Avatar'}
+              </label>
+              <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF up to 2MB</p>
+            </div>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="mb-4">
@@ -315,10 +783,100 @@ const Profile = () => {
             />
           </div>
 
+          {/* Emergency Contact Section */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <FaUserCircle className="text-primary-600" />
+              Emergency Contact Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="emergencyContact.name">
+                  Contact Name
+                </label>
+                <input
+                  type="text"
+                  id="emergencyContact.name"
+                  name="emergencyContact.name"
+                  value={formData.emergencyContact.name}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                  placeholder="Full name"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="emergencyContact.phone">
+                  Contact Phone
+                </label>
+                <input
+                  type="tel"
+                  id="emergencyContact.phone"
+                  name="emergencyContact.phone"
+                  value={formData.emergencyContact.phone}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                  placeholder="Phone number"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="emergencyContact.relationship">
+                  Relationship
+                </label>
+                <input
+                  type="text"
+                  id="emergencyContact.relationship"
+                  name="emergencyContact.relationship"
+                  value={formData.emergencyContact.relationship}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                  placeholder="e.g., Spouse, Parent"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Insurance Information Section */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <FaShieldAlt className="text-primary-600" />
+              Insurance Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="insuranceInfo.provider">
+                  Insurance Provider
+                </label>
+                <input
+                  type="text"
+                  id="insuranceInfo.provider"
+                  name="insuranceInfo.provider"
+                  value={formData.insuranceInfo.provider}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                  placeholder="e.g., PhilHealth, Private Insurance"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="insuranceInfo.policyNumber">
+                  Policy Number
+                </label>
+                <input
+                  type="text"
+                  id="insuranceInfo.policyNumber"
+                  name="insuranceInfo.policyNumber"
+                  value={formData.insuranceInfo.policyNumber}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                  placeholder="Policy/ID number"
+                />
+              </div>
+            </div>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed mt-6"
           >
             {loading ? 'Updating...' : 'Update Profile'}
           </button>
@@ -671,6 +1229,348 @@ const Profile = () => {
           </div>
         </form>
       </div>
+      )}
+
+      {/* Settings Tab */}
+      {activeTab === 'settings' && (
+        <div className="space-y-6">
+          {/* Security Settings Header */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+              <FaShieldAlt className="text-primary-600" />
+              Security Settings
+            </h3>
+            <p className="text-sm text-gray-600">Manage your account security settings</p>
+          </div>
+
+          <GoogleAccountConnect />
+
+          {/* Change Password */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h4 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2">
+              <FaLock className="text-primary-600" />
+              Change Password
+            </h4>
+
+            {passwordMessage && (
+              <div 
+                className={`mb-4 px-4 py-3 rounded border ${
+                  passwordMessage.includes('success') 
+                    ? 'bg-green-100 border-green-400 text-green-700' 
+                    : 'bg-red-100 border-red-400 text-red-700'
+                }`}
+              >
+                {passwordMessage}
+              </div>
+            )}
+
+            <form onSubmit={handlePasswordChange}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="currentPassword">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    id="currentPassword"
+                    name="currentPassword"
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                    placeholder="Enter your current password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newPassword">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    id="newPassword"
+                    name="newPassword"
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                    required
+                    minLength={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                    placeholder="Enter new password (min 6 characters)"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="confirmPassword">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                    required
+                    minLength={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                    placeholder="Confirm new password"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {passwordLoading ? 'Changing Password...' : 'Change Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Change Email */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h4 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2">
+              <FaEnvelope className="text-primary-600" />
+              Change Email Address
+            </h4>
+            <p className="text-sm text-gray-600 mb-4">Current email: <strong>{user?.email}</strong></p>
+
+            {emailMessage && (
+              <div 
+                className={`mb-4 px-4 py-3 rounded border ${
+                  emailMessage.includes('success') 
+                    ? 'bg-green-100 border-green-400 text-green-700' 
+                    : 'bg-red-100 border-red-400 text-red-700'
+                }`}
+              >
+                {emailMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleEmailChange}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newEmail">
+                    New Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="newEmail"
+                    name="newEmail"
+                    value={emailData.newEmail}
+                    onChange={(e) => setEmailData({ ...emailData, newEmail: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                    placeholder="Enter new email address"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="emailPassword">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    id="emailPassword"
+                    name="emailPassword"
+                    value={emailData.password}
+                    onChange={(e) => setEmailData({ ...emailData, password: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                    placeholder="Enter your password to confirm"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={emailLoading}
+                  className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {emailLoading ? 'Changing Email...' : 'Change Email'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Change Phone Number */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h4 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2">
+              <FaMobile className="text-primary-600" />
+              Change Phone Number
+            </h4>
+            <p className="text-sm text-gray-600 mb-4">Current phone: <strong>{user?.phone || 'Not set'}</strong></p>
+
+            {phoneMessage && (
+              <div 
+                className={`mb-4 px-4 py-3 rounded border ${
+                  phoneMessage.includes('success') 
+                    ? 'bg-green-100 border-green-400 text-green-700' 
+                    : 'bg-red-100 border-red-400 text-red-700'
+                }`}
+              >
+                {phoneMessage}
+              </div>
+            )}
+
+            <form onSubmit={handlePhoneChange}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newPhone">
+                    New Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    id="newPhone"
+                    name="newPhone"
+                    value={phoneData.newPhone}
+                    onChange={(e) => setPhoneData({ ...phoneData, newPhone: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                    placeholder="Enter new phone number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phonePassword">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    id="phonePassword"
+                    name="phonePassword"
+                    value={phoneData.password}
+                    onChange={(e) => setPhoneData({ ...phoneData, password: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                    placeholder="Enter your password to confirm"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={phoneLoading}
+                  className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {phoneLoading ? 'Changing Phone...' : 'Change Phone Number'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Two-Factor Authentication */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h4 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2">
+              <FaKey className="text-primary-600" />
+              Two-Factor Authentication
+            </h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Add an extra layer of security to your account by enabling two-factor authentication.
+            </p>
+
+            {twoFactorMessage && (
+              <div 
+                className={`mb-4 px-4 py-3 rounded border ${
+                  twoFactorMessage.includes('success') || twoFactorMessage.includes('enabled')
+                    ? 'bg-green-100 border-green-400 text-green-700' 
+                    : 'bg-red-100 border-red-400 text-red-700'
+                }`}
+              >
+                {twoFactorMessage}
+              </div>
+            )}
+
+            {twoFactorEnabled ? (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 font-semibold flex items-center gap-2">
+                    <FaCheckCircle className="text-green-600" />
+                    2FA is currently enabled
+                  </p>
+                </div>
+
+                <form onSubmit={handleDisable2FA}>
+                  <button
+                    type="submit"
+                    disabled={twoFactorLoading}
+                    className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {twoFactorLoading ? 'Disabling...' : 'Disable Two-Factor Authentication'}
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {!twoFactorData.qrCode ? (
+                  <button
+                    onClick={handleSetup2FA}
+                    disabled={twoFactorLoading}
+                    className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {twoFactorLoading ? 'Setting up...' : 'Set Up Two-Factor Authentication'}
+                  </button>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <p className="text-sm text-gray-700 mb-2">Scan this QR code with your authenticator app:</p>
+                      {twoFactorData.qrCode && (
+                        <div className="flex justify-center mb-4">
+                          <img src={twoFactorData.qrCode} alt="2FA QR Code" className="border-2 border-gray-300 rounded-lg" />
+                        </div>
+                      )}
+                      {twoFactorData.secret && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+                          <p className="text-xs text-gray-600 mb-1">Or enter this code manually:</p>
+                          <p className="text-sm font-mono font-bold text-gray-800">{twoFactorData.secret}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <form onSubmit={handleVerify2FA}>
+                      <div>
+                        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="verificationCode">
+                          Enter Verification Code
+                        </label>
+                        <input
+                          type="text"
+                          id="verificationCode"
+                          name="verificationCode"
+                          value={twoFactorData.verificationCode}
+                          onChange={(e) => setTwoFactorData({ ...twoFactorData, verificationCode: e.target.value })}
+                          required
+                          maxLength={6}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500 text-center text-lg font-mono"
+                          placeholder="000000"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={twoFactorLoading}
+                        className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed mt-4"
+                      >
+                        {twoFactorLoading ? 'Verifying...' : 'Verify and Enable 2FA'}
+                      </button>
+                    </form>
+                  </div>
+                )}
+
+                {twoFactorData.showBackupCodes && twoFactorData.backupCodes.length > 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+                    <p className="text-yellow-800 font-semibold mb-2">⚠️ Save these backup codes!</p>
+                    <p className="text-xs text-yellow-700 mb-3">These codes can be used to access your account if you lose your device. Store them in a safe place.</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {twoFactorData.backupCodes.map((code, index) => (
+                        <div key={index} className="bg-white border border-yellow-300 rounded px-3 py-2 text-sm font-mono text-center">
+                          {code}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

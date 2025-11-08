@@ -20,6 +20,12 @@ export const queueService = {
     return response.data;
   },
 
+  // Update priority or visit type
+  updatePriority: async (appointmentId, { priorityLevel, visitType }) => {
+    const response = await api.put(`/queue/${appointmentId}/priority`, { priorityLevel, visitType });
+    return response.data;
+  },
+
   // Call next patient
   callNextPatient: async (doctorId = null) => {
     const response = await api.post('/queue/next', { doctorId });

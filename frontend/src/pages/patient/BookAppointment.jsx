@@ -20,6 +20,11 @@ const BookAppointment = () => {
   const [error, setError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [bookedAppointment, setBookedAppointment] = useState(null);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotError, setSlotError] = useState('');
+  const [submitCooldown, setSubmitCooldown] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { addNotification } = useNotifications();
 
@@ -60,16 +65,65 @@ const BookAppointment = () => {
   };
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+
+    // If doctor or date changes, fetch available time slots
+    if (name === 'doctor' || name === 'appointmentDate') {
+      if (name === 'doctor') {
+        // Reset time when doctor changes
+        setFormData(prev => ({ ...prev, appointmentTime: '' }));
+      }
+      fetchAvailableSlots(name === 'doctor' ? value : formData.doctor, name === 'appointmentDate' ? value : formData.appointmentDate);
+    }
+  };
+
+  const fetchAvailableSlots = async (doctorId, date) => {
+    if (!doctorId || !date) {
+      setAvailableSlots([]);
+      return;
+    }
+
+    setLoadingSlots(true);
+    setSlotError('');
+    try {
+      const response = await patientService.getAvailableSlots(doctorId, date);
+      if (response.success) {
+        setAvailableSlots(response.slots || []);
+        // Clear error if slots are available
+        if (response.slots && response.slots.length > 0) {
+          setSlotError('');
+        } else if (response.message) {
+          // Show reason if no slots available (e.g., doctor unavailable)
+          setSlotError(response.message);
+        }
+      } else {
+        setAvailableSlots([]);
+        setSlotError(response.message || 'No available slots');
+      }
+    } catch (error) {
+      console.error('Error fetching available slots:', error);
+      setAvailableSlots([]);
+      setSlotError(error.response?.data?.message || 'Error loading available time slots');
+    } finally {
+      setLoadingSlots(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (isSubmitting || submitCooldown > 0) {
+      return;
+    }
+    
     setError('');
     setLoading(true);
+    setIsSubmitting(true);
 
     try {
       const response = await patientService.bookAppointment(formData);
@@ -102,6 +156,18 @@ const BookAppointment = () => {
       // Show success modal
       setShowSuccessModal(true);
       
+      // Start cooldown timer (5 seconds)
+      setSubmitCooldown(5);
+      const cooldownInterval = setInterval(() => {
+        setSubmitCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(cooldownInterval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
       // Reset form after a short delay
       setTimeout(() => {
         setFormData({
@@ -113,9 +179,26 @@ const BookAppointment = () => {
       }, 500);
       
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to book appointment');
+      const errorMessage = err.response?.data?.message || 'Failed to book appointment';
+      setError(errorMessage);
+      
+      // Handle rate limiting errors
+      if (err.response?.status === 429) {
+        const retryAfter = err.response?.data?.retryAfter || 5;
+        setSubmitCooldown(retryAfter);
+        const cooldownInterval = setInterval(() => {
+          setSubmitCooldown((prev) => {
+            if (prev <= 1) {
+              clearInterval(cooldownInterval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -159,33 +242,89 @@ const BookAppointment = () => {
 
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="appointmentDate">
-              Date
+              Date <span className="text-gray-500 text-xs">(Monday - Friday only)</span>
             </label>
             <input
               type="date"
               id="appointmentDate"
               name="appointmentDate"
               value={formData.appointmentDate}
-              onChange={handleChange}
+              onChange={(e) => {
+                const selectedDate = new Date(e.target.value);
+                const dayOfWeek = selectedDate.getDay();
+                
+                // Check if weekend (0 = Sunday, 6 = Saturday)
+                if (dayOfWeek === 0 || dayOfWeek === 6) {
+                  setError('Hospital is closed on weekends. Please select a weekday (Monday - Friday).');
+                  return;
+                }
+                
+                setError('');
+                handleChange(e);
+              }}
               required
               min={new Date().toISOString().split('T')[0]}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Hospital operating hours: Monday - Friday, 8:00 AM - 5:00 PM
+            </p>
           </div>
 
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="appointmentTime">
-              Time
+              Time <span className="text-gray-500 text-xs">(Hospital hours: 8:00 AM - 5:00 PM)</span>
             </label>
-            <input
-              type="time"
-              id="appointmentTime"
-              name="appointmentTime"
-              value={formData.appointmentTime}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-            />
+            {loadingSlots && formData.doctor && formData.appointmentDate ? (
+              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                Loading available time slots...
+              </div>
+            ) : availableSlots.length > 0 ? (
+              <select
+                id="appointmentTime"
+                name="appointmentTime"
+                value={formData.appointmentTime}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+              >
+                <option value="">Select an available time slot</option>
+                {availableSlots.map((slot, index) => (
+                  <option key={index} value={slot}>
+                    {slot}
+                  </option>
+                ))}
+              </select>
+            ) : formData.doctor && formData.appointmentDate ? (
+              <div className="w-full px-3 py-2 border border-red-300 rounded-lg bg-red-50">
+                <p className="text-red-700 text-sm">
+                  {slotError || 'No available time slots for this date. Please select another date or doctor.'}
+                </p>
+                <p className="text-xs text-red-600 mt-1">
+                  Hospital operating hours: Monday - Friday, 8:00 AM - 5:00 PM
+                </p>
+              </div>
+            ) : (
+              <input
+                type="text"
+                id="appointmentTime"
+                name="appointmentTime"
+                value={formData.appointmentTime}
+                onChange={handleChange}
+                required
+                disabled
+                placeholder="Please select doctor and date first"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+              />
+            )}
+            {slotError && formData.doctor && formData.appointmentDate && (
+              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                <div className="flex items-start">
+                  <FaExclamationTriangle className="text-red-600 mt-0.5 mr-2 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{slotError}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mb-4">
@@ -420,18 +559,23 @@ const BookAppointment = () => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || isSubmitting || submitCooldown > 0}
             className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {loading ? 'Booking...' : 'Book Appointment'}
+            {loading || isSubmitting ? 'Booking...' : submitCooldown > 0 ? `Please wait ${submitCooldown}s...` : 'Book Appointment'}
           </button>
+          {submitCooldown > 0 && (
+            <p className="text-sm text-gray-500 text-center mt-2">
+              Please wait {submitCooldown} second{submitCooldown !== 1 ? 's' : ''} before submitting again
+            </p>
+          )}
         </form>
       </div>
 
       {/* Success Modal */}
       {showSuccessModal && bookedAppointment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-fadeIn">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-fadeIn my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">

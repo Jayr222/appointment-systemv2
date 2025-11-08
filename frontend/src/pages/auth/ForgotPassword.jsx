@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { authService } from '../../services/authService';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -14,11 +15,10 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      // Implement password reset logic here
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setMessage('Password reset link sent to your email');
+      const response = await authService.forgotPassword(email);
+      setMessage(response.message || 'If an account with that email exists, a password reset link has been sent.');
     } catch (err) {
-      setError('Failed to send reset link');
+      setError(err.response?.data?.message || 'Failed to send reset link. Please try again later.');
     } finally {
       setLoading(false);
     }

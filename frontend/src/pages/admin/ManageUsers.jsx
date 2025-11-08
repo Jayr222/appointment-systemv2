@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FaUser, FaEye, FaEdit, FaTrash, FaUserMd, FaPhone, FaCalendar, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaUser, FaEye, FaEdit, FaTrash, FaUserMd, FaPhone, FaCalendar, FaMapMarkerAlt, FaHistory } from 'react-icons/fa';
 import adminService from '../../services/adminService';
 import { USER_ROLES } from '../../utils/constants';
 
@@ -9,9 +9,20 @@ const ManageUsers = () => {
   const [users, setUsers] = useState([]);
   const [filterRole, setFilterRole] = useState(searchParams.get('role') || '');
   const [filterActive, setFilterActive] = useState(searchParams.get('isActive') === 'true' ? true : undefined);
+  const [deletedFilter, setDeletedFilter] = useState('active'); // active | all | deleted
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showDeletedLogs, setShowDeletedLogs] = useState(false);
+  const [deletedLogs, setDeletedLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [roleConfirm, setRoleConfirm] = useState({
+    open: false,
+    user: null,
+    newRole: '',
+    loading: false,
+    error: ''
+  });
 
   useEffect(() => {
     // Read URL parameters on mount
@@ -28,11 +39,16 @@ const ManageUsers = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [filterRole, filterActive]);
+  }, [filterRole, filterActive, deletedFilter]);
 
   const fetchUsers = async () => {
     try {
-      const response = await adminService.getUsers(filterRole, filterActive);
+      setLoading(true);
+      let includeDeleted;
+      if (deletedFilter === 'all') includeDeleted = 'true';
+      if (deletedFilter === 'deleted') includeDeleted = 'only';
+
+      const response = await adminService.getUsers(filterRole, filterActive, includeDeleted);
       setUsers(response.users);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -68,6 +84,46 @@ const ManageUsers = () => {
       } catch (error) {
         console.error('Error deleting user:', error);
       }
+    }
+  };
+
+  const handleRestore = async (userId) => {
+    try {
+      await adminService.restoreUser(userId);
+      fetchUsers();
+    } catch (error) {
+      console.error('Error restoring user:', error);
+    }
+  };
+
+  const openRoleChangeModal = (user, newRole) => {
+    if (!newRole || newRole === user.role) return;
+    setRoleConfirm({ open: true, user, newRole, loading: false, error: '' });
+  };
+
+  const handleRoleChange = async () => {
+    if (!roleConfirm.user || !roleConfirm.newRole) return;
+    try {
+      setRoleConfirm(prev => ({ ...prev, loading: true, error: '' }));
+      await adminService.updateUser(roleConfirm.user._id, { role: roleConfirm.newRole });
+      setRoleConfirm({ open: false, user: null, newRole: '', loading: false, error: '' });
+      fetchUsers();
+    } catch (error) {
+      const message = error.response?.data?.message || 'Failed to update role';
+      setRoleConfirm(prev => ({ ...prev, loading: false, error: message }));
+      console.error('Error updating role:', error);
+    }
+  };
+
+  const fetchDeletedLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const response = await adminService.getDeletedUserLogs();
+      setDeletedLogs(response.logs);
+    } catch (error) {
+      console.error('Error fetching deleted user logs:', error);
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -126,51 +182,80 @@ const ManageUsers = () => {
       </div>
 
       {/* Filters */}
-      <div className="mb-4 flex gap-2">
-        <button
-          onClick={() => {
-            setFilterRole('');
-            setSearchParams({});
-          }}
-          className={`px-4 py-2 rounded-lg ${
-            filterRole === '' ? 'bg-primary-600 text-white' : 'bg-white'
-          }`}
-        >
-          All
-        </button>
-        <button
-          onClick={() => {
-            setFilterRole(USER_ROLES.PATIENT);
-            setSearchParams({ role: USER_ROLES.PATIENT });
-          }}
-          className={`px-4 py-2 rounded-lg ${
-            filterRole === USER_ROLES.PATIENT ? 'bg-primary-600 text-white' : 'bg-white'
-          }`}
-        >
-          Patients
-        </button>
-        <button
-          onClick={() => {
-            setFilterRole(USER_ROLES.DOCTOR);
-            setSearchParams({ role: USER_ROLES.DOCTOR });
-          }}
-          className={`px-4 py-2 rounded-lg ${
-            filterRole === USER_ROLES.DOCTOR ? 'bg-primary-600 text-white' : 'bg-white'
-          }`}
-        >
-          Doctors
-        </button>
-        <button
-          onClick={() => {
-            setFilterRole(USER_ROLES.ADMIN);
-            setSearchParams({ role: USER_ROLES.ADMIN });
-          }}
-          className={`px-4 py-2 rounded-lg ${
-            filterRole === USER_ROLES.ADMIN ? 'bg-primary-600 text-white' : 'bg-white'
-          }`}
-        >
-          Admins
-        </button>
+      <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setFilterRole('');
+              setSearchParams({});
+            }}
+            className={`px-4 py-2 rounded-lg ${
+              filterRole === '' ? 'bg-primary-600 text-white' : 'bg-white'
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => {
+              setFilterRole(USER_ROLES.PATIENT);
+              setSearchParams({ role: USER_ROLES.PATIENT });
+            }}
+            className={`px-4 py-2 rounded-lg ${
+              filterRole === USER_ROLES.PATIENT ? 'bg-primary-600 text-white' : 'bg-white'
+            }`}
+          >
+            Patients
+          </button>
+          <button
+            onClick={() => {
+              setFilterRole(USER_ROLES.DOCTOR);
+              setSearchParams({ role: USER_ROLES.DOCTOR });
+            }}
+            className={`px-4 py-2 rounded-lg ${
+              filterRole === USER_ROLES.DOCTOR ? 'bg-primary-600 text-white' : 'bg-white'
+            }`}
+          >
+            Doctors
+          </button>
+          <button
+            onClick={() => {
+              setFilterRole(USER_ROLES.ADMIN);
+              setSearchParams({ role: USER_ROLES.ADMIN });
+            }}
+            className={`px-4 py-2 rounded-lg ${
+              filterRole === USER_ROLES.ADMIN ? 'bg-primary-600 text-white' : 'bg-white'
+            }`}
+          >
+            Admins
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setDeletedFilter('active')}
+            className={`px-4 py-2 rounded-lg ${
+              deletedFilter === 'active' ? 'bg-primary-600 text-white' : 'bg-white'
+            }`}
+          >
+            Active Only
+          </button>
+          <button
+            onClick={() => setDeletedFilter('all')}
+            className={`px-4 py-2 rounded-lg ${
+              deletedFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-white'
+            }`}
+          >
+            All Users
+          </button>
+          <button
+            onClick={() => setDeletedFilter('deleted')}
+            className={`px-4 py-2 rounded-lg ${
+              deletedFilter === 'deleted' ? 'bg-primary-600 text-white' : 'bg-white'
+            }`}
+          >
+            Deleted Only
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6 border">
@@ -208,17 +293,30 @@ const ManageUsers = () => {
                     <td className="py-3 px-4">{user.email}</td>
                     <td className="py-3 px-4">{user.phone || 'N/A'}</td>
                     <td className="py-3 px-4">
-                      <span className="px-2 py-1 bg-primary-100 text-primary-700 rounded-full text-xs font-semibold">
-                        {user.role.toUpperCase()}
-                      </span>
+                      {['patient', 'nurse'].includes(user.role) && !user.isDeleted ? (
+                        <select
+                          value={user.role}
+                          onChange={(e) => openRoleChangeModal(user, e.target.value)}
+                          className="px-2 py-1 border rounded text-sm"
+                        >
+                          <option value={USER_ROLES.PATIENT}>Patient</option>
+                          <option value={USER_ROLES.NURSE}>Nurse</option>
+                        </select>
+                      ) : (
+                        <span className="px-2 py-1 bg-primary-100 text-primary-700 rounded-full text-xs font-semibold">
+                          {user.role.toUpperCase()}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        user.isActive 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-red-100 text-red-700'
+                        user.isDeleted
+                          ? 'bg-gray-200 text-gray-700'
+                          : user.isActive
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
                       }`}>
-                        {user.isActive ? 'Active' : 'Inactive'}
+                        {user.isDeleted ? 'Deleted' : user.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td className="py-3 px-4">
@@ -229,28 +327,107 @@ const ManageUsers = () => {
                         >
                           <FaEye /> View
                         </button>
+                      {!user.isDeleted ? (
+                        <>
+                          <button
+                            onClick={() => handleStatusToggle(user._id, user.isActive)}
+                            className={`px-3 py-1 rounded text-sm ${
+                              user.isActive 
+                                ? 'bg-yellow-500 text-white hover:bg-yellow-600' 
+                                : 'bg-green-500 text-white hover:bg-green-600'
+                            }`}
+                          >
+                            {user.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(user._id)}
+                            className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 flex items-center gap-1"
+                          >
+                            <FaTrash />
+                          </button>
+                        </>
+                      ) : (
                         <button
-                          onClick={() => handleStatusToggle(user._id, user.isActive)}
-                          className={`px-3 py-1 rounded text-sm ${
-                            user.isActive 
-                              ? 'bg-yellow-500 text-white hover:bg-yellow-600' 
-                              : 'bg-green-500 text-white hover:bg-green-600'
-                          }`}
+                          onClick={() => handleRestore(user._id)}
+                          className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
                         >
-                          {user.isActive ? 'Deactivate' : 'Activate'}
+                          Restore
                         </button>
-                        <button
-                          onClick={() => handleDelete(user._id)}
-                          className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 flex items-center gap-1"
-                        >
-                          <FaTrash />
-                        </button>
+                      )}
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 bg-white rounded-lg shadow-md border">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div className="flex items-center gap-2">
+            <FaHistory className="text-gray-500" />
+            <h2 className="text-xl font-semibold text-gray-800">Deleted User Activity</h2>
+          </div>
+          <button
+            onClick={() => {
+              const next = !showDeletedLogs;
+              setShowDeletedLogs(next);
+              if (!next) {
+                return;
+              }
+              fetchDeletedLogs();
+            }}
+            className="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+          >
+            {showDeletedLogs ? 'Hide Logs' : 'Show Logs'}
+          </button>
+        </div>
+
+        {showDeletedLogs && (
+          <div className="px-6 py-4">
+            {logsLoading ? (
+              <p className="text-gray-600">Loading activity...</p>
+            ) : deletedLogs.length === 0 ? (
+              <p className="text-gray-600">No deletion activity recorded.</p>
+            ) : (
+              <div className="space-y-4">
+                {deletedLogs.map((log) => (
+                  <div key={log.id} className="border rounded-lg p-4 bg-gray-50">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-gray-800">
+                          {log.action === 'delete_user' ? 'User Deleted' : 'User Restored'}
+                        </p>
+                        <p className="text-sm text-gray-600">{log.description}</p>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-700">
+                      <div>
+                        <span className="font-medium">Performed By:</span>{' '}
+                        {log.performedBy
+                          ? `${log.performedBy.name} (${log.performedBy.email})`
+                          : 'System'}
+                      </div>
+                      <div>
+                        <span className="font-medium">Affected User:</span>{' '}
+                        {log.affectedUser
+                          ? `${log.affectedUser.name} (${log.affectedUser.email})`
+                          : 'Unknown'}
+                      </div>
+                      <div>
+                        <span className="font-medium">Status:</span>{' '}
+                        {log.action === 'delete_user' ? 'Deleted' : 'Restored'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -363,6 +540,63 @@ const ManageUsers = () => {
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Role Change Confirmation Modal */}
+      {roleConfirm.open && roleConfirm.user && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="px-6 py-5 border-b bg-gradient-to-r from-primary-600 to-primary-500 text-white">
+              <h3 className="text-lg font-bold">
+                Confirm Role Change
+              </h3>
+              <p className="text-sm opacity-90 mt-1">
+                Review and confirm the update before proceeding.
+              </p>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-gray-50 border rounded-lg p-4">
+                <p className="text-sm text-gray-600">User</p>
+                <p className="font-semibold text-gray-900">{roleConfirm.user.name}</p>
+              </div>
+              <div className="flex items-center justify-between bg-white border rounded-lg p-4">
+                <div>
+                  <p className="text-sm text-gray-600">Change Role</p>
+                  <p className="font-semibold text-gray-900">
+                    {roleConfirm.user.role.toUpperCase()} → <span className="text-primary-600">{roleConfirm.newRole.toUpperCase()}</span>
+                  </p>
+                </div>
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary-100 text-primary-700">
+                  Pending
+                </span>
+              </div>
+
+              {roleConfirm.error && (
+                <div className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {roleConfirm.error}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 border-t flex items-center justify-end gap-3">
+              <button
+                onClick={() => setRoleConfirm({ open: false, user: null, newRole: '', loading: false, error: '' })}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+                disabled={roleConfirm.loading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRoleChange}
+                className={`px-4 py-2 rounded-lg text-white font-semibold ${roleConfirm.loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'}`}
+                disabled={roleConfirm.loading}
+              >
+                {roleConfirm.loading ? 'Saving...' : 'Confirm Change'}
               </button>
             </div>
           </div>

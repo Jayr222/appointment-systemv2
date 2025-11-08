@@ -37,7 +37,9 @@ const GoogleSignIn = () => {
         }
       } else {
         console.error('Google authentication failed:', data.message);
-        alert('Google sign-in failed. Please try again.');
+        // Display specific error message from backend
+        const errorMessage = data.message || 'Google sign-in failed. Please try again.';
+        alert(errorMessage);
       }
     } catch (error) {
       console.error('Error during Google sign-in:', error);
@@ -63,17 +65,19 @@ const GoogleSignIn = () => {
   }
 
   return (
-    <div className="w-full">
-      <GoogleLogin
-        onSuccess={handleSuccess}
-        onError={handleError}
-        useOneTap
-        text="signin_with"
-        size="large"
-        width="400"
-        shape="rectangular"
-        theme="outline"
-      />
+    <div className="w-full flex justify-center">
+      <div className="w-full max-w-full">
+        <GoogleLogin
+          onSuccess={handleSuccess}
+          onError={handleError}
+          useOneTap={false}
+          text="signin_with"
+          size="large"
+          width="100%"
+          shape="rectangular"
+          theme="outline"
+        />
+      </div>
     </div>
   );
 };

@@ -1,18 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { FaBell, FaCheckCircle, FaExclamationCircle, FaInfoCircle, FaTimes } from 'react-icons/fa';
+import { useNotifications } from '../../context/NotificationContext';
 
 const NotificationToast = ({ notification, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
+  const { stopContinuousRinging } = useNotifications();
 
   useEffect(() => {
-    // Auto-close after 5 seconds
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-      setTimeout(onClose, 300); // Wait for animation
-    }, 5000);
+    // Auto-close after 5 seconds (unless persistent)
+    if (!notification.persistent) {
+      const timer = setTimeout(() => {
+        setIsVisible(false);
+        setTimeout(onClose, 300); // Wait for animation
+      }, 5000);
 
-    return () => clearTimeout(timer);
-  }, [onClose]);
+      return () => clearTimeout(timer);
+    }
+  }, [onClose, notification.persistent]);
+
+  const handleAcknowledge = () => {
+    // Stop continuous ringing if it's a patient call notification
+    if (notification.persistent && notification.queueNumber) {
+      stopContinuousRinging();
+    }
+    
+    // Call custom acknowledge handler if provided
+    if (notification.onAcknowledge) {
+      notification.onAcknowledge();
+    }
+    
+    setIsVisible(false);
+    setTimeout(onClose, 300);
+  };
 
   const getIcon = () => {
     switch (notification.type) {
@@ -44,9 +63,15 @@ const NotificationToast = ({ notification, onClose }) => {
 
   return (
     <div
-      className={`min-w-[300px] max-w-md p-4 rounded-lg shadow-lg border-2 ${getBgColor()} transform transition-all duration-300 ${
-        isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
-      }`}
+      className={`min-w-[300px] max-w-md p-5 rounded-xl shadow-strong border-2 ${getBgColor()} ${
+        notification.persistent ? 'border-blue-500 animate-pulse' : ''
+      } transform transition-all duration-500 ease-out ${
+        isVisible ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'
+      } hover:shadow-strong hover:scale-[1.02] transition-all`}
+      onClick={notification.persistent ? handleAcknowledge : undefined}
+      style={notification.persistent ? { cursor: 'pointer' } : {}}
+      role="alert"
+      aria-live={notification.persistent ? 'polite' : 'assertive'}
     >
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
@@ -60,11 +85,21 @@ const NotificationToast = ({ notification, onClose }) => {
               Queue #{notification.queueNumber}
             </p>
           )}
+          {notification.persistent && (
+            <p className="text-xs text-blue-600 mt-2 font-semibold">
+              Click to acknowledge and stop ringing
+            </p>
+          )}
         </div>
         <button
-          onClick={() => {
-            setIsVisible(false);
-            setTimeout(onClose, 300);
+          onClick={(e) => {
+            e.stopPropagation();
+            if (notification.persistent) {
+              handleAcknowledge();
+            } else {
+              setIsVisible(false);
+              setTimeout(onClose, 300);
+            }
           }}
           className="flex-shrink-0 text-gray-400 hover:text-gray-600"
         >

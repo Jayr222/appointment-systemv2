@@ -11,6 +11,7 @@ import {
 import { getVerificationStatus } from '../controllers/doctorVerificationController.js';
 import { doctorOnly } from '../middleware/doctorOnly.js';
 import verifiedDoctorOnly from '../middleware/verifiedDoctorOnly.js';
+import patientDocumentRoutes from './patientDocumentRoutes.js';
 
 const router = express.Router();
 
@@ -21,6 +22,9 @@ router.get('/appointments', doctorOnly, getAppointments); // Allow unverified do
 router.put('/appointments/:id/status', doctorOnly, updateAppointmentStatus); // Allow unverified doctors to update appointment status
 router.get('/schedule', doctorOnly, getSchedule); // Allow unverified doctors to see their schedule
 router.get('/patients/:id/medical-history', doctorOnly, getPatientMedicalHistory); // Allow all doctors to view patient medical history
+
+// Patient document routes (require verified doctor access)
+router.use('/patient-documents', patientDocumentRoutes);
 
 // Routes requiring verified doctors only
 router.get('/patients/:id/records', doctorOnly, verifiedDoctorOnly, getPatientRecords);

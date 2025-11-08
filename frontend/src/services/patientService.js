@@ -44,6 +44,20 @@ export const patientService = {
   updateMedicalHistory: async (medicalHistory) => {
     const response = await api.put('/patient/medical-history', { medicalHistory });
     return response.data;
+  },
+
+  getAvailableSlots: async (doctorId, date) => {
+    const response = await api.get('/patient/available-slots', {
+      params: { doctorId, date }
+    });
+    return response.data;
+  },
+
+  downloadMedicalRecordDocx: async (recordId) => {
+    const response = await api.get(`/patient/records/${recordId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
   }
 };
 

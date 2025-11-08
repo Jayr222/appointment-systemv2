@@ -30,6 +30,8 @@ const AddMedicalRecord = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [sendToPatient, setSendToPatient] = useState(true);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -87,15 +89,19 @@ const AddMedicalRecord = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    setConfirmOpen(true);
+  };
 
+  const confirmAndSubmit = async () => {
+    setLoading(true);
     try {
-      await doctorService.createMedicalRecord(formData);
+      await doctorService.createMedicalRecord({ ...formData, sendToPatient });
       navigate('/doctor/appointments');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create medical record');
     } finally {
       setLoading(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -396,13 +402,25 @@ const AddMedicalRecord = () => {
           />
         </div>
 
-        <div className="flex space-x-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={sendToPatient}
+              onChange={(e) => setSendToPatient(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            Send summary to patient via Messages after saving
+          </label>
+        </div>
+
+        <div className="mt-4 flex space-x-4">
           <button
             type="submit"
             disabled={loading}
             className="flex-1 bg-primary-500 text-white py-3 rounded-lg hover:bg-primary-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold shadow-md"
           >
-            {loading ? 'Saving...' : 'Save Medical Record'}
+            {loading ? 'Saving...' : 'Review & Confirm'}
           </button>
           <button
             type="button"
@@ -413,6 +431,73 @@ const AddMedicalRecord = () => {
           </button>
         </div>
       </form>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 overflow-hidden">
+            <div className="px-6 py-4 border-b bg-gradient-to-r from-primary-600 to-primary-500 text-white">
+              <h3 className="text-lg font-semibold">Confirm completion & notify patient</h3>
+              <p className="text-sm opacity-90">Review key details before finalizing this visit.</p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {appointment && (
+                <div className="bg-gray-50 border rounded p-3 text-sm">
+                  <div><strong>Patient:</strong> {appointment?.patient?.name}</div>
+                  <div><strong>Doctor:</strong> {appointment?.doctor?.name}</div>
+                  <div><strong>Appt:</strong> {new Date(appointment.appointmentDate).toLocaleDateString()} {appointment.appointmentTime}</div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="bg-gray-50 border rounded p-3">
+                  <div className="font-semibold text-gray-800 mb-1">Diagnosis</div>
+                  <div className="text-gray-700">{formData.diagnosis || '—'}</div>
+                </div>
+                <div className="bg-gray-50 border rounded p-3">
+                  <div className="font-semibold text-gray-800 mb-1">Chief Complaint</div>
+                  <div className="text-gray-700">{formData.chiefComplaint || '—'}</div>
+                </div>
+                <div className="bg-gray-50 border rounded p-3">
+                  <div className="font-semibold text-gray-800 mb-1">Medications</div>
+                  <div className="text-gray-700">{formData.medications.filter(m => m.name).length} item(s)</div>
+                </div>
+                <div className="bg-gray-50 border rounded p-3">
+                  <div className="font-semibold text-gray-800 mb-1">Follow‑up</div>
+                  <div className="text-gray-700">{formData.followUpDate || '—'}</div>
+                </div>
+              </div>
+
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={sendToPatient}
+                  onChange={(e) => setSendToPatient(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                Send summary to patient via Messages
+              </label>
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 border-t flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmOpen(false)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+                disabled={loading}
+              >
+                Back
+              </button>
+              <button
+                onClick={confirmAndSubmit}
+                className={`px-4 py-2 rounded-lg text-white font-semibold ${loading ? 'bg-gray-400' : 'bg-primary-600 hover:bg-primary-700'}`}
+                disabled={loading}
+              >
+                {loading ? 'Submitting...' : 'Confirm & Complete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

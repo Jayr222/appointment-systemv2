@@ -22,7 +22,10 @@ export const protect = async (req, res, next) => {
       
       next();
     } catch (error) {
-      console.error('Token verification error:', error);
+      // Only log unexpected errors, not standard token expiration/invalid signature
+      if (error.name !== 'JsonWebTokenError' && error.name !== 'TokenExpiredError') {
+        console.error('Token verification error:', error);
+      }
       return res.status(401).json({ message: 'Not authorized, invalid token' });
     }
   }

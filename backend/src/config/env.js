@@ -17,8 +17,8 @@ export const config = {
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
   GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
-  // Domain-based authentication
-  ADMIN_DOMAINS: process.env.ADMIN_DOMAINS ? process.env.ADMIN_DOMAINS.split(',') : [],
-  DOCTOR_DOMAINS: process.env.DOCTOR_DOMAINS ? process.env.DOCTOR_DOMAINS.split(',') : []
+  // Domain-based authentication (comma-separated strings)
+  ADMIN_DOMAINS: process.env.ADMIN_DOMAINS || '',
+  DOCTOR_DOMAINS: process.env.DOCTOR_DOMAINS || ''
 };
 

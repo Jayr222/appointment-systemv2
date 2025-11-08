@@ -4,7 +4,8 @@ import {
   assignQueue, 
   updateStatus, 
   callNext, 
-  checkIn 
+  checkIn,
+  updatePriority
 } from '../controllers/queueController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -21,6 +22,7 @@ router.post('/assign/:appointmentId', assignQueue);
 
 // Update queue status
 router.put('/:appointmentId/status', updateStatus);
+router.put('/:appointmentId/priority', updatePriority);
 
 // Call next patient
 router.post('/next', callNext);

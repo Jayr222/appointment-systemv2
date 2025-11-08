@@ -1,5 +1,12 @@
 import express from 'express';
-import { getGoogleAuthUrl, handleGoogleCallback, verifyGoogleToken } from '../services/googleAuthService.js';
+import {
+  getGoogleAuthUrl,
+  handleGoogleCallback,
+  verifyGoogleToken,
+  linkGoogleAccount,
+  disconnectGoogleAccount
+} from '../services/googleAuthService.js';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -59,6 +66,61 @@ router.post('/verify', async (req, res) => {
     res.status(401).json({ 
       message: error.message || 'Failed to verify Google token',
       error: error.message || 'Unknown error'
+    });
+  }
+});
+
+// Connect Google account for authenticated user
+router.post('/connect', protect, async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ message: 'ID token not provided' });
+    }
+
+    const user = await linkGoogleAccount(req.user.id, idToken);
+
+    res.json({
+      success: true,
+      message: 'Gmail account connected successfully.',
+      user: {
+        id: user._id,
+        email: user.email,
+        googleEmail: user.googleEmail,
+        googleConnectedAt: user.googleConnectedAt,
+        googleConnected: !!user.googleId
+      }
+    });
+  } catch (error) {
+    console.error('Error connecting Google account:', error);
+    res.status(400).json({
+      message: error.message || 'Failed to connect Google account'
+    });
+  }
+});
+
+// Disconnect Google account for authenticated user
+router.delete('/connect', protect, async (req, res) => {
+  try {
+    const user = await disconnectGoogleAccount(req.user.id);
+
+    res.json({
+      success: true,
+      message: 'Gmail account disconnected successfully.',
+      user: {
+        id: user._id,
+        email: user.email,
+        googleEmail: user.googleEmail,
+        googleConnectedAt: user.googleConnectedAt,
+        googleConnected: !!user.googleId
+      }
+    });
+  } catch (error) {
+    console.error('Error disconnecting Google account:', error);
+    const status = error.message?.includes('Please set a password') ? 400 : 500;
+    res.status(status).json({
+      message: error.message || 'Failed to disconnect Google account'
     });
   }
 });

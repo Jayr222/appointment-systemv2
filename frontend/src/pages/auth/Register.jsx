@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { FaEye, FaEyeSlash, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 
 const Register = () => {
@@ -17,22 +18,38 @@ const Register = () => {
   };
 
   const [formData, setFormData] = useState(() => {
-    const saved = loadSavedData();
-    return saved || {
+    const defaultData = {
       firstName: '',
       middleName: '',
       surname: '',
       email: '',
       password: '',
       confirmPassword: '',
-      role: 'patient',
       phone: '',
       dateOfBirth: '',
       gender: 'male'
     };
+
+    const saved = loadSavedData();
+    if (!saved) {
+      return defaultData;
+    }
+
+    const { role: _ignoredRole, ...rest } = saved;
+    return { ...defaultData, ...rest };
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState({
+    length: false,
+    uppercase: false,
+    lowercase: false,
+    number: false,
+    special: false
+  });
+  const [passwordStrength, setPasswordStrength] = useState({ label: '', color: 'bg-gray-200', textColor: 'text-gray-400', percent: 0 });
 
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -42,16 +59,63 @@ const Register = () => {
     sessionStorage.setItem('registerFormData', JSON.stringify(formData));
   }, [formData]);
 
+  useEffect(() => {
+    if (formData.password) {
+      evaluatePassword(formData.password);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const allRequirementsMet = Object.values(passwordFeedback).every(Boolean);
+  const showRequirementReminder = Boolean(formData.password) && !allRequirementsMet;
+
+  const evaluatePassword = (password) => {
+    const feedback = {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(password)
+    };
+    setPasswordFeedback(feedback);
+
+    const met = Object.values(feedback).filter(Boolean).length;
+    if (!password) {
+      setPasswordStrength({ label: '', color: 'bg-gray-200', textColor: 'text-gray-400', percent: 0 });
+    } else if (met <= 2) {
+      setPasswordStrength({ label: 'Weak', color: 'bg-red-500', textColor: 'text-red-600', percent: 30 });
+    } else if (met <= 4) {
+      setPasswordStrength({ label: 'Medium', color: 'bg-yellow-400', textColor: 'text-yellow-500', percent: 65 });
+    } else {
+      setPasswordStrength({ label: 'Strong', color: 'bg-green-500', textColor: 'text-green-600', percent: 100 });
+    }
+
+    return feedback;
+  };
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value
+    }));
+
+    if (name === 'password') {
+      evaluatePassword(value);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const feedback = evaluatePassword(formData.password);
+    const allRequirementsMet = Object.values(feedback).every(Boolean);
+
+    if (!allRequirementsMet) {
+      setError('Password must include at least one uppercase letter, one lowercase letter, one number, one special symbol, and be at least 8 characters long.');
+      return;
+    }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
@@ -61,7 +125,7 @@ const Register = () => {
     setLoading(true);
 
     try {
-      const { confirmPassword, firstName, middleName, surname, ...registerData } = formData;
+    const { confirmPassword, firstName, middleName, surname, ...registerData } = formData;
       
       // Combine name fields: FirstName MiddleName LastName
       const name = [firstName, middleName, surname]
@@ -75,7 +139,7 @@ const Register = () => {
         return;
       }
       
-      await register({ ...registerData, name });
+      await register({ ...registerData, name, role: 'patient' });
       
       // Clear saved form data after successful registration
       sessionStorage.removeItem('registerFormData');
@@ -168,7 +232,7 @@ const Register = () => {
 
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-                Email
+                Email <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
@@ -182,59 +246,119 @@ const Register = () => {
               />
             </div>
 
-            <div className="mb-4">
+            <div className="mb-6">
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
-                Password
+                Password <span className="text-red-500">*</span>
               </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-                placeholder="Enter your password"
-              />
+              <div className={`relative ${passwordStrength.label === 'Strong' ? 'ring-1 ring-green-500 rounded-lg' : ''}`}>
+                <input
+                  type={passwordVisible ? 'text' : 'password'}
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  className={`w-full pr-12 pl-3 py-2 border rounded-lg focus:outline-none transition-colors ${
+                    passwordStrength.label === 'Strong' ? 'border-green-500 focus:border-green-500' : 'border-gray-300 focus:border-primary-500'
+                  }`}
+                  placeholder="Enter your password"
+                  minLength={8}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPasswordVisible(prev => !prev)}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-primary-600 transition-colors"
+                  aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+                >
+                  {passwordVisible ? <FaEye /> : <FaEyeSlash />}
+                </button>
+              </div>
+
+              {!showRequirementReminder && passwordStrength.label && (
+                <p className={`mt-2 text-xs font-semibold ${passwordStrength.textColor}`}>
+                  {passwordStrength.label}
+                </p>
+              )}
+
+              <div
+                className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                  showRequirementReminder ? 'max-h-96 opacity-100 mt-3' : 'max-h-0 opacity-0 mt-0 pointer-events-none'
+                }`}
+              >
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
+                      <div
+                        className={`${passwordStrength.color} h-2 transition-all duration-300`}
+                        style={{ width: `${passwordStrength.percent}%` }}
+                      ></div>
+                    </div>
+                    <span className={`text-xs font-semibold ${passwordStrength.textColor}`}>
+                      {passwordStrength.label || 'Strength'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {[
+                      { key: 'length', label: 'At least 8 characters' },
+                      { key: 'uppercase', label: 'One uppercase letter (A-Z)' },
+                      { key: 'lowercase', label: 'One lowercase letter (a-z)' },
+                      { key: 'number', label: 'One number (0-9)' },
+                      { key: 'special', label: 'One special symbol (@, #, $, %, !, ...)' }
+                    ].map((requirement) => {
+                      const met = passwordFeedback[requirement.key];
+                      return (
+                        <div
+                          key={requirement.key}
+                          className={`flex items-center gap-2 text-xs ${met ? 'text-green-600' : 'text-gray-600'}`}
+                        >
+                          <span className={`${met ? 'text-green-500' : 'text-red-500'} text-base`}>
+                            {met ? <FaCheckCircle /> : <FaTimesCircle />}
+                          </span>
+                          <span className="leading-snug">{requirement.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {(!passwordFeedback.length || !passwordFeedback.number || !passwordFeedback.special) && formData.password && (
+                    <p className="text-xs text-red-500">
+                      Password must include at least one uppercase letter, one number, and one special symbol.
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="confirmPassword">
                 Confirm Password
               </label>
-              <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-                placeholder="Confirm your password"
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="role">
-                Role
-              </label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-              >
-                <option value="patient">Patient</option>
-                <option value="doctor">Doctor</option>
-                <option value="nurse">Nurse</option>
-                <option value="admin">Admin</option>
-              </select>
+              <div className="relative">
+                <input
+                  type={confirmPasswordVisible ? 'text' : 'password'}
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  required
+                  className="w-full pr-12 pl-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
+                  placeholder="Confirm your password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setConfirmPasswordVisible(prev => !prev)}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-primary-600 transition-colors"
+                  aria-label={confirmPasswordVisible ? 'Hide confirm password' : 'Show confirm password'}
+                >
+                  {confirmPasswordVisible ? <FaEye /> : <FaEyeSlash />}
+                </button>
+              </div>
             </div>
 
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone">
-                Phone
+                Phone <span className="text-red-500">*</span>
               </label>
               <input
                 type="tel"
@@ -242,6 +366,7 @@ const Register = () => {
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
+                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
                 placeholder="Enter your phone"
               />

@@ -79,6 +79,20 @@ const appointmentSchema = new mongoose.Schema({
     enum: ['waiting', 'called', 'in-progress', 'served', 'skipped'],
     default: 'waiting'
   },
+  // Patient arrival confirmation
+  patientArrived: {
+    type: Boolean,
+    default: false
+  },
+  arrivedAt: {
+    type: Date,
+    default: null
+  },
+  confirmedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   checkedInAt: {
     type: Date,
     default: null
@@ -90,6 +104,21 @@ const appointmentSchema = new mongoose.Schema({
   servedAt: {
     type: Date,
     default: null
+  },
+  // Visit metadata
+  visitType: {
+    type: String,
+    enum: ['booking', 'walk-in'],
+    default: 'booking'
+  },
+  priorityLevel: {
+    type: String,
+    enum: ['regular', 'priority', 'emergency'],
+    default: 'regular'
+  },
+  estimatedStartAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
@@ -98,6 +127,15 @@ const appointmentSchema = new mongoose.Schema({
 // Index for efficient queue queries
 appointmentSchema.index({ queueDate: 1, queueNumber: 1 });
 appointmentSchema.index({ queueStatus: 1 });
+
+// Prevent double booking of identical slot for a doctor (pending/confirmed only)
+appointmentSchema.index(
+  { doctor: 1, appointmentDate: 1, appointmentTime: 1, status: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ['pending', 'confirmed'] } }
+  }
+);
 
 export default mongoose.model('Appointment', appointmentSchema);
 

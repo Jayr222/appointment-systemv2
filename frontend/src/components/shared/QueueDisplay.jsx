@@ -4,14 +4,18 @@ import { FaUser, FaClock, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaB
 import queueService from '../../services/queueService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from '../../context/NotificationContext';
+import { formatNameForPrivacy } from '../../utils/constants';
+import { useNavigate } from 'react-router-dom';
 
 const QueueDisplay = ({ doctorId = null, showControls = false }) => {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState(null);
   const [currentCalled, setCurrentCalled] = useState(null);
+  const [calledPatientId, setCalledPatientId] = useState(null); // Track which patient is being called
   const { user } = useAuth();
-  const { addNotification } = useNotifications();
+  const { addNotification, startContinuousRinging, stopContinuousRinging } = useNotifications();
+  const navigate = useNavigate();
 
   // Define fetchQueue using useCallback to avoid dependency issues
   const fetchQueue = useCallback(async () => {
@@ -108,7 +112,7 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
         addNotification({
           type: 'info',
           title: 'Queue Number Assigned',
-          message: `Queue #${data.queueNumber} assigned to ${data.appointment?.patient?.name || 'patient'}`,
+          message: `Queue #${data.queueNumber} assigned to ${formatNameForPrivacy(data.appointment?.patient?.name || 'patient')}`,
           queueNumber: data.queueNumber,
           playSound: false
         });
@@ -119,9 +123,17 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
       console.log('Queue status changed:', data);
       fetchQueue();
       
-      // Notify relevant users
+      // Stop ringing if patient status changes to in-progress or served
       const userId = user?.id || user?._id;
       if (user && user.role === 'patient' && userId === data.patientId) {
+        // Stop continuous ringing when status changes from 'called'
+        if (data.status === 'in-progress' || data.status === 'served' || data.status === 'skipped') {
+          if (calledPatientId === data.patientId) {
+            stopContinuousRinging();
+            setCalledPatientId(null);
+          }
+        }
+        
         const statusMessages = {
           'called': 'You have been called! Please proceed to the consultation room.',
           'in-progress': 'Your consultation is in progress.',
@@ -141,23 +153,28 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
     newSocket.on('patient-called', (data) => {
       console.log('Patient called:', data);
       setCurrentCalled(data);
+      setCalledPatientId(data.patientId); // Track called patient
       fetchQueue();
       
       // Show notification to the patient
       const userId = user?.id || user?._id;
       if (user && user.role === 'patient' && userId === data.patientId) {
+        // Start continuous ringing for patient
+        startContinuousRinging();
+        
         addNotification({
           type: 'info',
           title: 'Your Turn! 🎉',
-          message: `Queue number ${data.queueNumber}, please proceed to the consultation room immediately.`,
+          message: `Queue number ${data.queueNumber}, please proceed to the consultation room immediately. Click to acknowledge.`,
           queueNumber: data.queueNumber,
-          showBrowserNotification: true
+          showBrowserNotification: true,
+          persistent: true // Keep notification visible until acknowledged
         });
       } else if (user?.role === 'admin' || user?.role === 'doctor') {
         addNotification({
           type: 'info',
           title: 'Patient Called',
-          message: `Queue #${data.queueNumber} - ${data.appointment?.patient?.name || 'Patient'} has been called.`,
+          message: `Queue #${data.queueNumber} - ${formatNameForPrivacy(data.appointment?.patient?.name || 'Patient')} has been called.`,
           queueNumber: data.queueNumber,
           playSound: false
         });
@@ -238,6 +255,35 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
     }
   };
 
+  const formatETA = (iso) => {
+    if (!iso) return 'ETA: —';
+    const dt = new Date(iso);
+    const now = new Date();
+    const diffMin = Math.max(0, Math.round((dt.getTime() - now.getTime()) / 60000));
+    return diffMin <= 0 ? 'ETA: Now' : `ETA: ~${diffMin}m`;
+  };
+
+  const priorityColor = (priority) => {
+    switch (priority) {
+      case 'emergency':
+        return 'bg-red-600 text-white';
+      case 'priority':
+        return 'bg-orange-500 text-white';
+      default:
+        return 'bg-gray-200 text-gray-800';
+    }
+  };
+
+  const handleSetPriority = async (appointmentId, level) => {
+    try {
+      await queueService.updatePriority(appointmentId, { priorityLevel: level });
+      fetchQueue();
+    } catch (error) {
+      console.error('Error updating priority:', error);
+      alert(error.response?.data?.message || 'Failed to update priority');
+    }
+  };
+
   if (!user) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -274,7 +320,7 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
             <div>
               <p className="text-sm text-blue-600 font-semibold">Currently Called</p>
               <p className="text-2xl font-bold text-blue-800">
-                Queue #{currentCalled.queueNumber} - {currentCalled.patient?.name || 'Unknown'}
+                Queue #{currentCalled.queueNumber} - {formatNameForPrivacy(currentCalled.patient?.name || 'Unknown')}
               </p>
             </div>
             <FaBell className="text-4xl text-blue-500 animate-pulse" />
@@ -344,7 +390,7 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
                     <div className="flex items-center gap-2">
                       <FaUser className="text-gray-400" />
                       <p className="font-semibold text-gray-800">
-                        {appointment.patient?.name || 'Unknown Patient'}
+                        {formatNameForPrivacy(appointment.patient?.name || 'Unknown Patient')}
                       </p>
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
@@ -359,8 +405,25 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
                     {getStatusIcon(appointment.queueStatus)}
                     <span className="capitalize">{appointment.queueStatus.replace('-', ' ')}</span>
                   </div>
+                <div className={`px-2 py-1 rounded-full text-xs font-semibold ${priorityColor(appointment.priorityLevel)}`}>
+                  {appointment.priorityLevel ? appointment.priorityLevel.toUpperCase() : 'REGULAR'}
+                </div>
+                <div className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                  {formatETA(appointment.estimatedStartAt)}
+                </div>
                   {showControls && (user?.role === 'doctor' || user?.role === 'admin') && (
                     <div className="flex gap-2">
+                    {appointment.queueStatus === 'waiting' && (
+                      <select
+                        value={appointment.priorityLevel || 'regular'}
+                        onChange={(e) => handleSetPriority(appointment._id, e.target.value)}
+                        className="px-2 py-1 border rounded text-sm"
+                      >
+                        <option value="regular">Regular</option>
+                        <option value="priority">Priority</option>
+                        <option value="emergency">Emergency</option>
+                      </select>
+                    )}
                       {appointment.queueStatus === 'waiting' && (
                         <button
                           onClick={() => handleUpdateStatus(appointment._id, 'called')}
@@ -379,13 +442,14 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
                       )}
                       {appointment.queueStatus === 'in-progress' && (
                         <button
-                          onClick={() => handleUpdateStatus(appointment._id, 'served')}
+                          onClick={() => navigate('/doctor/add-medical-record', { state: { appointment } })}
                           className="px-3 py-1 text-white rounded text-sm"
                           style={{ backgroundColor: '#31694E' }}
                           onMouseEnter={(e) => e.target.style.backgroundColor = '#27543e'}
                           onMouseLeave={(e) => e.target.style.backgroundColor = '#31694E'}
+                          title="Fill out diagnosis and complete visit"
                         >
-                          Complete
+                          Add Diagnosis
                         </button>
                       )}
                     </div>

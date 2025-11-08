@@ -2,8 +2,41 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { FaInfoCircle, FaUsers, FaHeartbeat, FaAward } from 'react-icons/fa';
 import AppBar from '../components/shared/AppBar';
+import { useSiteContent } from '../context/SiteContentContext';
 
 const About = () => {
+  const { content, loading } = useSiteContent();
+  
+  const organizationName = content?.organizationName || 'Sun Valley Mega Health Center';
+  const about = content?.about || {};
+  const mission = about.mission || 'To provide accessible, high-quality healthcare services to our community.';
+  const vision = about.vision || 'To be the leading community health center.';
+  const story = about.story || 'Our health center was established with a vision to transform healthcare delivery.';
+  const teamDescription = about.teamDescription || 'Our healthcare team consists of experienced and dedicated professionals.';
+  const values = about.values || [
+    { title: 'Compassion', description: 'We treat every patient with empathy, respect, and understanding.' },
+    { title: 'Excellence', description: 'We strive for the highest standards in healthcare delivery.' },
+    { title: 'Community', description: 'We are committed to serving and strengthening our community.' }
+  ];
+
+  const iconMap = {
+    'FaHeartbeat': FaHeartbeat,
+    'FaAward': FaAward,
+    'FaUsers': FaUsers,
+    'FaInfoCircle': FaInfoCircle
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <AppBar />
+        <div className="pt-20 pb-12 flex items-center justify-center">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AppBar />
@@ -17,76 +50,49 @@ const About = () => {
               </div>
             </div>
             <h1 className="text-4xl font-bold text-gray-800 mb-2">About Us</h1>
-            <p className="text-xl text-gray-600">Sun Valley Mega Health Center</p>
+            <p className="text-xl text-gray-600">{organizationName}</p>
           </div>
 
           {/* Mission and Vision */}
           <div className="grid md:grid-cols-2 gap-8 mb-12">
             <div className="bg-white rounded-lg shadow-md p-8">
               <h2 className="text-2xl font-semibold text-gray-800 mb-4">Our Mission</h2>
-              <p className="text-gray-700 leading-relaxed">
-                To provide accessible, high-quality healthcare services to our community, ensuring that every individual 
-                receives compassionate and professional medical care. We are committed to promoting health, preventing 
-                disease, and improving the overall well-being of all community members.
-              </p>
+              <p className="text-gray-700 leading-relaxed">{mission}</p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-8">
               <h2 className="text-2xl font-semibold text-gray-800 mb-4">Our Vision</h2>
-              <p className="text-gray-700 leading-relaxed">
-                To be the leading community health center, recognized for excellence in healthcare delivery, 
-                innovative medical services, and unwavering commitment to patient care. We envision a healthy 
-                community where everyone has access to quality healthcare services.
-              </p>
+              <p className="text-gray-700 leading-relaxed">{vision}</p>
             </div>
           </div>
 
           {/* Values */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-12">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Our Core Values</h2>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                  <FaHeartbeat className="text-green-600 text-2xl" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Compassion</h3>
-                <p className="text-gray-600">We treat every patient with empathy, respect, and understanding.</p>
-              </div>
-              <div className="text-center">
-                <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                  <FaAward className="text-blue-600 text-2xl" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Excellence</h3>
-                <p className="text-gray-600">We strive for the highest standards in healthcare delivery.</p>
-              </div>
-              <div className="text-center">
-                <div className="bg-purple-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                  <FaUsers className="text-purple-600 text-2xl" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Community</h3>
-                <p className="text-gray-600">We are committed to serving and strengthening our community.</p>
+          {values && values.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-8 mb-12">
+              <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Our Core Values</h2>
+              <div className="grid md:grid-cols-3 gap-6">
+                {values.map((value, index) => {
+                  const Icon = iconMap[value.icon] || FaHeartbeat;
+                  const colors = ['bg-green-100 text-green-600', 'bg-blue-100 text-blue-600', 'bg-purple-100 text-purple-600'];
+                  const colorClass = value.color || colors[index % colors.length];
+                  return (
+                    <div key={index} className="text-center">
+                      <div className={`${colorClass} rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4`}>
+                        <Icon className="text-2xl" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-gray-800 mb-2">{value.title}</h3>
+                      <p className="text-gray-600">{value.description}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Our Story */}
           <div className="bg-white rounded-lg shadow-md p-8 mb-12">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Our Story</h2>
             <div className="space-y-4 text-gray-700 leading-relaxed">
-              <p>
-                Sun Valley Mega Health Center was established with a vision to transform healthcare delivery 
-                in our community. Since our inception, we have been dedicated to providing comprehensive, 
-                patient-centered medical services to individuals and families.
-              </p>
-              <p>
-                Our team of experienced healthcare professionals, including licensed doctors, nurses, and 
-                medical staff, work together to ensure that every patient receives the best possible care. 
-                We combine modern medical technology with traditional values of compassion and care.
-              </p>
-              <p>
-                Over the years, we have expanded our services to include preventive care, diagnostics, 
-                treatment, and health education. We believe in empowering our patients through knowledge 
-                and providing them with the tools they need to maintain good health.
-              </p>
+              <p>{story}</p>
             </div>
           </div>
 
@@ -94,9 +100,7 @@ const About = () => {
           <div className="bg-white rounded-lg shadow-md p-8">
             <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Our Team</h2>
             <p className="text-gray-700 text-center leading-relaxed mb-6">
-              Our healthcare team consists of experienced and dedicated professionals committed to providing 
-              exceptional medical care. All our doctors are licensed and verified, ensuring that you receive 
-              treatment from qualified healthcare providers.
+              {teamDescription}
             </p>
             <div className="text-center">
               <Link

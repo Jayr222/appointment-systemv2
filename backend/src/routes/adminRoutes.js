@@ -5,9 +5,14 @@ import {
   getUserById,
   updateUser,
   deleteUser,
+  restoreUser,
+  getDeletedUsersLog,
+  getHealthReports,
   getAppointmentRequests,
   getAllAppointments,
-  getSystemLogs
+  getSystemLogs,
+  getPendingArrivals,
+  confirmPatientArrival
 } from '../controllers/adminController.js';
 import {
   getPendingVerifications,
@@ -23,8 +28,13 @@ router.get('/users', adminOnly, getUsers);
 router.get('/users/:id', adminOnly, getUserById);
 router.put('/users/:id', adminOnly, updateUser);
 router.delete('/users/:id', adminOnly, deleteUser);
+router.put('/users/:id/restore', adminOnly, restoreUser);
+router.get('/users/deleted/logs', adminOnly, getDeletedUsersLog);
+router.get('/reports/health', adminOnly, getHealthReports);
 router.get('/appointment-requests', adminOnly, getAppointmentRequests);
 router.get('/appointments', adminOnly, getAllAppointments);
+router.get('/appointments/pending-arrival', adminOnly, getPendingArrivals);
+router.put('/appointments/:id/confirm-arrival', adminOnly, confirmPatientArrival);
 router.get('/logs', adminOnly, getSystemLogs);
 
 // Doctor verification routes

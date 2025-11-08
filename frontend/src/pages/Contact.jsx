@@ -2,8 +2,29 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaClock } from 'react-icons/fa';
 import AppBar from '../components/shared/AppBar';
+import { useSiteContent } from '../context/SiteContentContext';
 
 const Contact = () => {
+  const { content, loading } = useSiteContent();
+  
+  const organizationName = content?.organizationName || 'Sun Valley Mega Health Center';
+  const contact = content?.contact || {};
+  const address = contact.address || {};
+  const phone = contact.phone || {};
+  const email = contact.email || {};
+  const hours = contact.operatingHours || {};
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <AppBar />
+        <div className="pt-20 pb-12 flex items-center justify-center">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AppBar />
@@ -12,7 +33,7 @@ const Contact = () => {
           {/* Header */}
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-gray-800 mb-2">Contact Us</h1>
-            <p className="text-xl text-gray-600">Get in Touch with Sun Valley Mega Health Center</p>
+            <p className="text-xl text-gray-600">Get in Touch with {organizationName}</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
@@ -29,10 +50,10 @@ const Contact = () => {
                     <div>
                       <h3 className="font-semibold text-gray-800 mb-1">Address</h3>
                       <p className="text-gray-600">
-                        Sun Valley Mega Health Center<br />
-                        [Street Address]<br />
-                        [City, Province]<br />
-                        Philippines
+                        {organizationName}<br />
+                        {address.street || '[Street Address]'}<br />
+                        {address.city && address.province ? `${address.city}, ${address.province}` : address.city || address.province || '[City, Province]'}<br />
+                        {address.country || 'Philippines'}
                       </p>
                     </div>
                   </div>
@@ -44,9 +65,12 @@ const Contact = () => {
                     <div>
                       <h3 className="font-semibold text-gray-800 mb-1">Phone</h3>
                       <p className="text-gray-600">
-                        Main: (02) 1234-5678<br />
-                        Emergency: (02) 1234-5679<br />
-                        Mobile: +63 912 345 6789
+                        {phone.main && `Main: ${phone.main}`}
+                        {phone.main && phone.emergency && <br />}
+                        {phone.emergency && `Emergency: ${phone.emergency}`}
+                        {(phone.main || phone.emergency) && phone.mobile && <br />}
+                        {phone.mobile && `Mobile: ${phone.mobile}`}
+                        {!phone.main && !phone.emergency && !phone.mobile && 'Contact information not available'}
                       </p>
                     </div>
                   </div>
@@ -58,9 +82,12 @@ const Contact = () => {
                     <div>
                       <h3 className="font-semibold text-gray-800 mb-1">Email</h3>
                       <p className="text-gray-600">
-                        General: info@sunvalleyhealthcenter.gov.ph<br />
-                        Appointments: appointments@sunvalleyhealthcenter.gov.ph<br />
-                        Support: support@sunvalleyhealthcenter.gov.ph
+                        {email.general && `General: ${email.general}`}
+                        {email.general && email.appointments && <br />}
+                        {email.appointments && `Appointments: ${email.appointments}`}
+                        {(email.general || email.appointments) && email.support && <br />}
+                        {email.support && `Support: ${email.support}`}
+                        {!email.general && !email.appointments && !email.support && 'Email information not available'}
                       </p>
                     </div>
                   </div>
@@ -72,10 +99,14 @@ const Contact = () => {
                     <div>
                       <h3 className="font-semibold text-gray-800 mb-1">Operating Hours</h3>
                       <p className="text-gray-600">
-                        Monday - Friday: 8:00 AM - 6:00 PM<br />
-                        Saturday: 8:00 AM - 2:00 PM<br />
-                        Sunday: Closed<br />
-                        Emergency services available 24/7
+                        {hours.weekdays && `Monday - Friday: ${hours.weekdays}`}
+                        {hours.weekdays && hours.saturday && <br />}
+                        {hours.saturday && `Saturday: ${hours.saturday}`}
+                        {(hours.weekdays || hours.saturday) && hours.sunday && <br />}
+                        {hours.sunday && `Sunday: ${hours.sunday}`}
+                        {(hours.weekdays || hours.saturday || hours.sunday) && hours.emergency && <br />}
+                        {hours.emergency && hours.emergency}
+                        {!hours.weekdays && !hours.saturday && !hours.sunday && !hours.emergency && 'Operating hours not available'}
                       </p>
                     </div>
                   </div>

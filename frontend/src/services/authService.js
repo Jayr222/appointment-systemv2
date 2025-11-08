@@ -68,11 +68,73 @@ export const authService = {
     return response.data;
   },
 
+  uploadAvatar: async (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const response = await api.post('/auth/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
   changePassword: async (currentPassword, newPassword) => {
     const response = await api.put('/auth/change-password', {
       currentPassword,
       newPassword
     });
+    return response.data;
+  },
+
+  forgotPassword: async (email) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  resetPassword: async (token, password) => {
+    const response = await api.put(`/auth/reset-password/${token}`, { password });
+    return response.data;
+  },
+
+  changeEmail: async (newEmail, password) => {
+    const response = await api.put('/auth/change-email', { newEmail, password });
+    if (response.data.user) {
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+    return response.data;
+  },
+
+  changePhone: async (newPhone, password) => {
+    const response = await api.put('/auth/change-phone', { newPhone, password });
+    if (response.data.user) {
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+    return response.data;
+  },
+
+  connectGoogleAccount: async (idToken) => {
+    const response = await api.post('/auth/google/connect', { idToken });
+    return response.data;
+  },
+
+  disconnectGoogleAccount: async () => {
+    const response = await api.delete('/auth/google/connect');
+    return response.data;
+  },
+
+  setup2FA: async () => {
+    const response = await api.post('/auth/2fa/setup');
+    return response.data;
+  },
+
+  verify2FA: async (token) => {
+    const response = await api.post('/auth/2fa/verify', { token });
+    return response.data;
+  },
+
+  disable2FA: async (password) => {
+    const response = await api.post('/auth/2fa/disable', { password });
     return response.data;
   },
 

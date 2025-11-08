@@ -1,10 +1,17 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useSidebar } from '../../context/SidebarContext';
+import Avatar from './Avatar';
+import ThemeToggle from './ThemeToggle';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { isCollapsed } = useSidebar();
+
+  const displayEmail =
+    user?.googleConnected && user?.googleEmail ? user.googleEmail : user?.email;
 
   const handleLogout = () => {
     logout();
@@ -12,26 +19,26 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-white shadow-md fixed top-0 right-0 left-64 z-10 border-b">
+    <nav className={`shadow-md fixed top-0 right-0 z-10 border-b border-white border-opacity-20 transition-all duration-300 ${isCollapsed ? 'left-20' : 'left-64'}`} style={{ backgroundColor: '#31694E' }}>
       <div className="px-6 py-4 flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">
+          <h2 className="text-2xl font-bold text-white">
             {user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1)} Dashboard
           </h2>
         </div>
         <div className="flex items-center space-x-4">
+          <ThemeToggle />
           <div className="flex items-center space-x-3">
             <div className="text-right">
-              <p className="text-sm font-medium text-gray-800">{user?.name}</p>
-              <p className="text-xs text-gray-500">{user?.email}</p>
+              <p className="text-sm font-medium text-white">{user?.name}</p>
+              <p className="text-xs text-white text-opacity-80">{displayEmail}</p>
             </div>
-            <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center text-white font-semibold shadow-md">
-              {user?.name?.charAt(0).toUpperCase()}
-            </div>
+            <Avatar user={user} size="md" />
           </div>
           <button
             onClick={handleLogout}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-md"
+            className="btn bg-red-500 hover:bg-red-600 focus:ring-red-300 text-white px-4 py-2 rounded-lg font-semibold shadow-md transition-all duration-300"
+            aria-label="Logout"
           >
             Logout
           </button>

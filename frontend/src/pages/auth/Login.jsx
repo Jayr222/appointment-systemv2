@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import GoogleSignIn from '../../components/auth/GoogleSignIn';
 import AppBar from '../../components/shared/AppBar';
@@ -12,9 +13,41 @@ const Login = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [lockUntilTime, setLockUntilTime] = useState(null);
 
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!lockUntilTime) {
+      return undefined;
+    }
+
+    const updateCountdown = () => {
+      const millisecondsRemaining = lockUntilTime - Date.now();
+      const secondsRemaining = Math.ceil(millisecondsRemaining / 1000);
+
+      if (secondsRemaining <= 0) {
+        setLockUntilTime(null);
+        setError('');
+        return;
+      }
+
+      setError(
+        `Account locked due to too many failed login attempts. Please try again in ${secondsRemaining} second${
+          secondsRemaining === 1 ? '' : 's'
+        }.`
+      );
+    };
+
+    // Initial update to prevent 1-second delay
+    updateCountdown();
+
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [lockUntilTime]);
 
   const handleChange = (e) => {
     setFormData({
@@ -25,11 +58,25 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const isCurrentlyLocked = lockUntilTime && lockUntilTime > Date.now();
+
+    if (isCurrentlyLocked) {
+      // Prevent unnecessary requests while locked
+      const secondsRemaining = Math.ceil((lockUntilTime - Date.now()) / 1000);
+      setError(
+        `Account locked due to too many failed login attempts. Please try again in ${secondsRemaining} second${
+          secondsRemaining === 1 ? '' : 's'
+        }.`
+      );
+      return;
+    }
+
     setError('');
     setLoading(true);
 
     try {
       await login(formData.email, formData.password);
+      setLockUntilTime(null);
       const user = JSON.parse(localStorage.getItem('user'));
       
       // Redirect based on role
@@ -47,8 +94,24 @@ const Login = () => {
       if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
         setError('Cannot connect to server. Please make sure the backend server is running on port 5000.');
       } else if (err.response) {
-        setError(err.response?.data?.message || 'Login failed');
+        if (err.response.status === 423 && err.response.data?.lockUntil) {
+          const lockTime = new Date(err.response.data.lockUntil).getTime();
+          setLockUntilTime(lockTime);
+        } else if (err.response.status === 429 && Number.isFinite(err.response.data?.retryAfter)) {
+          // 429 from loginAttemptLimiter (IP-based) - show dynamic countdown using retryAfter seconds
+          const lockTime = Date.now() + (err.response.data.retryAfter * 1000);
+          setLockUntilTime(lockTime);
+          // Force immediate message update
+          const secondsRemaining = Math.ceil((lockTime - Date.now()) / 1000);
+          setError(
+            `Too many login attempts. Please try again in ${secondsRemaining} second${secondsRemaining === 1 ? '' : 's'}.`
+          );
+        } else {
+          setLockUntilTime(null);
+          setError(err.response?.data?.message || 'Login failed');
+        }
       } else {
+        setLockUntilTime(null);
         setError(err.message || 'Login failed. Please check your connection.');
       }
     } finally {
@@ -130,25 +193,35 @@ const Login = () => {
 
               <div>
                 <label className="block text-gray-700 text-sm mb-1" htmlFor="password">Password</label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none text-base"
-                  style={{ 
-                    '--tw-ring-color': '#31694E'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.boxShadow = '0 0 0 2px #31694E';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.boxShadow = '';
-                  }}
-                  placeholder="Enter your password"
-                />
+                <div className="relative">
+                  <input
+                    type={passwordVisible ? 'text' : 'password'}
+                    id="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                    className="w-full pr-12 px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none text-base"
+                    style={{ 
+                      '--tw-ring-color': '#31694E'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.boxShadow = '0 0 0 2px #31694E';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.boxShadow = '';
+                    }}
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPasswordVisible(prev => !prev)}
+                    className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-primary-600 transition-colors"
+                    aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+                  >
+                    {passwordVisible ? <FaEye /> : <FaEyeSlash />}
+                  </button>
+                </div>
               </div>
 
               {/* Centered Forgot Password */}

@@ -2,15 +2,20 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   FaTachometerAlt, FaCalendarAlt, FaClipboardList, FaUser, 
-  FaClock, FaUsers, FaFileAlt, FaUserMd, FaHeartbeat, FaNotesMedical
+  FaClock, FaUsers, FaFileAlt, FaUserMd, FaHeartbeat, FaNotesMedical, FaEnvelope,
+  FaBars, FaTimes, FaFolder, FaChartBar
 } from 'react-icons/fa';
 import { useRole } from '../../context/RoleContext';
 import { USER_ROLES } from '../../utils/constants';
+import { useSidebar } from '../../context/SidebarContext';
+import ThemeToggle from './ThemeToggle';
+import Tooltip from './Tooltip';
 import logo from '../../assets/logo.jfif';
 
 const Sidebar = () => {
   const location = useLocation();
   const { userRole } = useRole();
+  const { isCollapsed, toggleSidebar } = useSidebar();
 
   const isActive = (path) => location.pathname === path;
 
@@ -18,13 +23,16 @@ const Sidebar = () => {
     { path: '/patient/dashboard', label: 'Dashboard', icon: FaTachometerAlt },
     { path: '/patient/book-appointment', label: 'Book Appointment', icon: FaCalendarAlt },
     { path: '/patient/records', label: 'My Records', icon: FaClipboardList },
+    { path: '/patient/messages', label: 'Messages', icon: FaEnvelope },
     { path: '/patient/profile', label: 'Profile', icon: FaUser }
   ];
 
   const doctorLinks = [
     { path: '/doctor/dashboard', label: 'Dashboard', icon: FaTachometerAlt },
     { path: '/doctor/appointments', label: 'Appointments', icon: FaCalendarAlt },
+    { path: '/doctor/patient-documents', label: 'Patient Documents', icon: FaFolder },
     { path: '/doctor/schedule', label: 'Schedule', icon: FaClock },
+    { path: '/doctor/messages', label: 'Messages', icon: FaEnvelope },
     { path: '/doctor/profile', label: 'Profile', icon: FaUser }
   ];
 
@@ -32,7 +40,9 @@ const Sidebar = () => {
     { path: '/admin/dashboard', label: 'Dashboard', icon: FaTachometerAlt },
     { path: '/admin/users', label: 'Manage Users', icon: FaUsers },
     { path: '/admin/appointments', label: 'Appointments', icon: FaCalendarAlt },
+    { path: '/admin/patient-arrivals', label: 'Patient Arrivals', icon: FaClock },
     { path: '/admin/doctor-verifications', label: 'Verify Doctors', icon: FaUserMd },
+    { path: '/admin/reports', label: 'Reports', icon: FaChartBar },
     { path: '/admin/logs', label: 'System Logs', icon: FaFileAlt }
   ];
 
@@ -60,50 +70,95 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="text-white w-64 min-h-screen fixed left-0 top-0 shadow-lg" style={{ backgroundColor: '#31694E' }}>
-      <div className="p-6">
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-4">
-          <img
-            src={logo}
-            alt="Sun Valley Mega Health Center Logo"
-            className="w-20 h-20 rounded-full border-2 border-white shadow-md object-cover mb-3"
-          />
-          <h1 className="text-xl font-bold text-center">Sun Valley Mega Health Center</h1>
+    <div 
+      className={`text-white h-screen fixed left-0 top-0 shadow-lg flex flex-col transition-all duration-300 ease-in-out ${
+        isCollapsed ? 'w-20' : 'w-64'
+      }`}
+      style={{ backgroundColor: '#31694E' }}
+    >
+      {/* Header with Logo and Toggle */}
+      <div className={`p-6 flex-shrink-0 transition-all duration-300 ${isCollapsed ? 'px-4' : ''}`}>
+        <div className="flex items-center justify-between mb-4">
+          {!isCollapsed && (
+            <div className="flex flex-col items-center w-full">
+              <img
+                src={logo}
+                alt="Sun Valley Mega Health Center Logo"
+                className="w-20 h-20 rounded-full border-2 border-white shadow-md object-cover mb-3"
+              />
+              <h1 className="text-xl font-bold text-center">Sun Valley Mega Health Center</h1>
+            </div>
+          )}
+          {isCollapsed && (
+            <div className="flex justify-center w-full">
+              <img
+                src={logo}
+                alt="Logo"
+                className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover"
+              />
+            </div>
+          )}
         </div>
+        
+        {/* Collapse Toggle Button */}
+        <Tooltip content={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} position="right">
+          <button
+            onClick={toggleSidebar}
+            className="w-full p-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 text-white transition-all duration-300 flex items-center justify-center"
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {isCollapsed ? (
+              <FaBars className="w-5 h-5" />
+            ) : (
+              <FaTimes className="w-5 h-5" />
+            )}
+          </button>
+        </Tooltip>
       </div>
-      <nav className="mt-8">
+
+      {/* Navigation Links */}
+      <nav className={`flex-1 overflow-y-auto mt-4 transition-all duration-300 ${isCollapsed ? 'px-2' : ''}`}>
         {getLinks().map((link) => {
           const IconComponent = link.icon;
           return (
-            <Link
-              key={link.path}
-              to={link.path}
-              className={`flex items-center px-6 py-3 transition-colors ${
-                isActive(link.path)
-                  ? 'border-r-4 border-white'
-                  : ''
-              }`}
-              style={{
-                backgroundColor: isActive(link.path) ? '#27543e' : 'transparent'
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive(link.path)) {
-                  e.currentTarget.style.backgroundColor = '#27543e';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive(link.path)) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
-            >
-              <IconComponent className="mr-3 text-xl" />
-              <span>{link.label}</span>
-            </Link>
+            <Tooltip key={link.path} content={link.label} position="right" disabled={!isCollapsed}>
+              <Link
+                to={link.path}
+                className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-6'} py-3 transition-all duration-300 transform hover:translate-x-1 rounded-lg mx-2 ${
+                  isActive(link.path)
+                    ? 'border-r-4 border-white bg-opacity-90'
+                    : 'hover:bg-opacity-50'
+                }`}
+                style={{
+                  backgroundColor: isActive(link.path) ? '#27543e' : 'transparent'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive(link.path)) {
+                    e.currentTarget.style.backgroundColor = '#27543e';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive(link.path)) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <IconComponent className={`${isCollapsed ? '' : 'mr-3'} text-xl transition-transform duration-300 ${
+                  isActive(link.path) ? 'scale-110' : ''
+                }`} />
+                {!isCollapsed && (
+                  <span className="font-medium">{link.label}</span>
+                )}
+              </Link>
+            </Tooltip>
           );
         })}
       </nav>
+
+      {/* Footer with Theme Toggle */}
+      <div className={`flex-shrink-0 p-6 border-t border-white border-opacity-20 transition-all duration-300 ${isCollapsed ? 'px-4' : ''}`}>
+        <ThemeToggle className={isCollapsed ? 'w-full' : 'w-full'} />
+      </div>
     </div>
   );
 };

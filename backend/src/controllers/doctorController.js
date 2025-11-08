@@ -2,8 +2,10 @@ import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import User from '../models/User.js';
 import { logActivity } from '../services/loggingService.js';
+import { sendAppointmentConfirmation, sendAppointmentCancellation } from '../services/emailService.js';
 import { assignQueueNumber } from '../services/queueService.js';
-import { emitQueueUpdate } from '../utils/socketEmitter.js';
+import { emitQueueUpdate, emitNewMessage, emitNotification } from '../utils/socketEmitter.js';
+import Message from '../models/Message.js';
 
 // @desc    Get doctor dashboard stats
 // @route   GET /api/doctor/dashboard
@@ -90,6 +92,7 @@ export const updateAppointmentStatus = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
+    const prevStatus = appointment.status;
     appointment.status = status;
     if (notes) appointment.notes = notes;
 
@@ -99,33 +102,45 @@ export const updateAppointmentStatus = async (req, res) => {
     await appointment.populate('patient', 'name email phone');
     await appointment.populate('doctor', 'name specialization');
 
-    // Auto-assign queue number if appointment is confirmed and date is today
-    if (status === 'confirmed') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const appointmentDate = new Date(appointment.appointmentDate);
-      appointmentDate.setHours(0, 0, 0, 0);
+    // Note: Queue number will only be assigned after admin confirms patient arrival
+    // No auto-assignment when doctor confirms appointment
 
-      if (appointmentDate.getTime() === today.getTime() && !appointment.queueNumber) {
-        try {
-          const updatedAppointment = await assignQueueNumber(appointment._id);
-          await updatedAppointment.populate('patient', 'name email phone');
-          await updatedAppointment.populate('doctor', 'name');
-          
-          // Emit socket event
-          emitQueueUpdate('queue-number-assigned', {
-            appointmentId: updatedAppointment._id,
-            patientId: updatedAppointment.patient._id || updatedAppointment.patient,
-            queueNumber: updatedAppointment.queueNumber,
-            appointment: updatedAppointment
-          });
-        } catch (error) {
-          console.error('Error auto-assigning queue:', error);
-          // Don't fail the request if queue assignment fails
-        }
+    // Emit appointment confirmed event to notify patient
+    if (status === 'confirmed') {
+      // Fire-and-forget email (do not block the request)
+      if (appointment?.patient?.email) {
+        const details = {
+          date: new Date(appointment.appointmentDate).toLocaleDateString(),
+          time: appointment.appointmentTime,
+          doctorName: appointment?.doctor?.name || 'Assigned Doctor',
+          reason: appointment.reason || 'Consultation'
+        };
+        sendAppointmentConfirmation(appointment.patient.email, details).catch((err) => {
+          console.error('Appointment confirmation email failed:', err?.message || err);
+        });
       }
 
-      // Emit appointment confirmed event to notify patient
+      // Create in-system message to patient
+      try {
+        const msg = await Message.create({
+          sender: req.user.id,
+          receiver: appointment.patient._id || appointment.patient,
+          subject: 'Appointment Confirmed',
+          content: `Your appointment has been confirmed.\n\nDate: ${new Date(appointment.appointmentDate).toLocaleDateString()}\nTime: ${appointment.appointmentTime}\nDoctor: ${appointment?.doctor?.name || 'Assigned Doctor'}`,
+          appointment: appointment._id,
+          messageType: 'appointment'
+        });
+        emitNotification(appointment.patient._id || appointment.patient, {
+          type: 'new_message',
+          title: 'Appointment Confirmed',
+          message: `Your appointment on ${new Date(appointment.appointmentDate).toLocaleDateString()} ${appointment.appointmentTime} was confirmed.`,
+          data: { messageId: msg._id }
+        });
+        emitNewMessage(appointment.patient._id || appointment.patient, { message: msg.toObject(), sender: appointment?.doctor?.name || 'Doctor' });
+      } catch (msgErr) {
+        console.error('Auto message (confirmed) failed:', msgErr);
+      }
+
       emitQueueUpdate('appointment-confirmed', {
         appointmentId: appointment._id,
         patientId: appointment.patient._id || appointment.patient,
@@ -135,10 +150,45 @@ export const updateAppointmentStatus = async (req, res) => {
           appointmentTime: appointment.appointmentTime,
           reason: appointment.reason,
           doctor: appointment.doctor,
-          status: appointment.status,
-          queueNumber: appointment.queueNumber
+          status: appointment.status
         }
       });
+    }
+
+    // Send cancellation email if cancelled
+    if (status === 'cancelled') {
+      if (appointment?.patient?.email) {
+        const details = {
+          date: new Date(appointment.appointmentDate).toLocaleDateString(),
+          time: appointment.appointmentTime,
+          doctorName: appointment?.doctor?.name || 'Assigned Doctor',
+          reason: notes || 'Cancelled by doctor'
+        };
+        sendAppointmentCancellation(appointment.patient.email, details).catch((err) => {
+          console.error('Appointment cancellation email failed:', err?.message || err);
+        });
+      }
+
+      // Create in-system message to patient
+      try {
+        const msg = await Message.create({
+          sender: req.user.id,
+          receiver: appointment.patient._id || appointment.patient,
+          subject: 'Appointment Cancelled',
+          content: `Your appointment was cancelled.\n\nDate: ${new Date(appointment.appointmentDate).toLocaleDateString()}\nTime: ${appointment.appointmentTime}\nDoctor: ${appointment?.doctor?.name || 'Assigned Doctor'}\n${notes ? `Reason: ${notes}` : ''}`,
+          appointment: appointment._id,
+          messageType: 'appointment'
+        });
+        emitNotification(appointment.patient._id || appointment.patient, {
+          type: 'new_message',
+          title: 'Appointment Cancelled',
+          message: `Your appointment on ${new Date(appointment.appointmentDate).toLocaleDateString()} ${appointment.appointmentTime} was cancelled.`,
+          data: { messageId: msg._id }
+        });
+        emitNewMessage(appointment.patient._id || appointment.patient, { message: msg.toObject(), sender: appointment?.doctor?.name || 'Doctor' });
+      } catch (msgErr) {
+        console.error('Auto message (cancelled) failed:', msgErr);
+      }
     }
 
     // Log activity
@@ -210,9 +260,56 @@ export const createMedicalRecord = async (req, res) => {
       followUpDate
     });
 
-    // If linked to an appointment, mark it as completed
+    // If linked to an appointment, mark it as completed and served in queue
     if (appointment) {
-      await Appointment.findByIdAndUpdate(appointment, { status: 'completed' });
+      await Appointment.findByIdAndUpdate(
+        appointment,
+        { status: 'completed', queueStatus: 'served', servedAt: new Date() }
+      );
+    }
+
+    // Optionally notify patient with a summary via in-app message
+    const shouldNotify = req.body?.sendToPatient !== false;
+    if (shouldNotify && patient) {
+      try {
+        const summaryLines = [];
+        if (chiefComplaint) summaryLines.push(`Chief Complaint: ${chiefComplaint}`);
+        if (diagnosis) summaryLines.push(`Diagnosis: ${diagnosis}`);
+        if (treatmentPlan) summaryLines.push(`Plan: ${treatmentPlan}`);
+        if (Array.isArray(medications) && medications.length > 0) {
+          const medsList = medications
+            .filter(m => m?.name)
+            .map(m => `• ${m.name}${m.dosage ? ` – ${m.dosage}` : ''}${m.frequency ? `, ${m.frequency}` : ''}`)
+            .join('\n');
+          if (medsList) {
+            summaryLines.push(`Medications:\n${medsList}`);
+          }
+        }
+        if (followUpDate) {
+          const f = new Date(followUpDate);
+          summaryLines.push(`Follow-up: ${isNaN(f.getTime()) ? followUpDate : f.toLocaleDateString()}`);
+        }
+
+        const content = `Your visit summary has been recorded.\n\n${summaryLines.join('\n\n')}`;
+
+        const msg = await Message.create({
+          sender: req.user.id,
+          receiver: patient,
+          subject: 'Visit Summary',
+          content,
+          appointment: appointment || null,
+          messageType: 'appointment'
+        });
+        emitNotification(patient, {
+          type: 'new_message',
+          title: 'Visit Summary',
+          message: 'Your visit summary is available.',
+          data: { messageId: msg._id }
+        });
+        emitNewMessage(patient, { message: msg.toObject(), sender: req.user.name || 'Doctor' });
+      } catch (e) {
+        console.error('Failed to send visit summary message:', e);
+      }
     }
 
     // Log activity
