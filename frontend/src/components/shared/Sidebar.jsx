@@ -103,7 +103,7 @@ const Sidebar = () => {
         <Tooltip content={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} position="right">
           <button
             onClick={toggleSidebar}
-            className="w-full p-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 text-white transition-all duration-300 flex items-center justify-center md:hidden"
+            className="w-full p-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 text-white transition-all duration-300 hidden md:flex items-center justify-center"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? (
