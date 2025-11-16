@@ -68,13 +68,25 @@ const Sidebar = () => {
     }
   };
 
+  const mobileOpen = !isCollapsed;
+
   return (
-    <div 
-      className={`text-white h-screen fixed left-0 top-0 shadow-lg flex flex-col transition-all duration-300 ease-in-out ${
-        isCollapsed ? 'w-20' : 'w-64'
-      } md:translate-x-0 ${isCollapsed ? '' : ''} z-20 md:z-auto transform md:transform-none bg-[#31694E] md:bg-transparent ${isCollapsed ? '' : ''} ${isCollapsed ? '' : ''}`}
-      style={{ backgroundColor: '#31694E' }}
-    >
+    <>
+      {/* Backdrop on mobile when sidebar is open */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-40 md:hidden z-10"
+          onClick={toggleSidebar}
+          aria-hidden="true"
+        />
+      )}
+
+      <div 
+        className={`text-white h-screen fixed left-0 top-0 shadow-lg flex flex-col transition-transform duration-300 ease-in-out ${
+          isCollapsed ? 'w-20 md:w-20' : 'w-64 md:w-64'
+        } ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 z-20 md:z-auto bg-[#31694E]`}
+        style={{ backgroundColor: '#31694E' }}
+      >
       {/* Header with Logo and Toggle */}
       <div className={`p-6 flex-shrink-0 transition-all duration-300 ${isCollapsed ? 'px-4' : ''}`}>
         <div className="flex items-center justify-between mb-4">
@@ -155,6 +167,7 @@ const Sidebar = () => {
       </nav>
 
     </div>
+    </>
   );
 };
 
