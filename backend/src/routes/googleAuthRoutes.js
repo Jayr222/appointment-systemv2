@@ -73,23 +73,54 @@ router.post('/verify', async (req, res) => {
 // Connect Google account for authenticated user
 router.post('/connect', protect, async (req, res) => {
   try {
-    const { idToken } = req.body;
+    const { idToken, password } = req.body;
 
     if (!idToken) {
       return res.status(400).json({ message: 'ID token not provided' });
     }
 
-    const user = await linkGoogleAccount(req.user.id, idToken);
+    // Get user with password field
+    const User = (await import('../models/User.js')).default;
+    const user = await User.findById(req.user.id).select('+password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify password if user has one
+    // Note: Users who only use Google auth won't have a password, so we skip verification for them
+    if (user.password) {
+      if (!password) {
+        return res.status(400).json({ 
+          message: 'Password verification required to connect Google account',
+          requiresPassword: true
+        });
+      }
+
+      const isPasswordValid = await user.matchPassword(password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ 
+          message: 'Invalid password. Please verify your password to connect Google account.',
+          requiresPassword: true
+        });
+      }
+    } else {
+      // User doesn't have a password (Google-only account)
+      // This shouldn't normally happen for linking, but handle it gracefully
+      console.log(`User ${user.email} doesn't have a password - skipping password verification for Google account linking`);
+    }
+
+    const linkedUser = await linkGoogleAccount(req.user.id, idToken);
 
     res.json({
       success: true,
       message: 'Gmail account connected successfully.',
       user: {
-        id: user._id,
-        email: user.email,
-        googleEmail: user.googleEmail,
-        googleConnectedAt: user.googleConnectedAt,
-        googleConnected: !!user.googleId
+        id: linkedUser._id,
+        email: linkedUser.email,
+        googleEmail: linkedUser.googleEmail,
+        googleConnectedAt: linkedUser.googleConnectedAt,
+        googleConnected: !!linkedUser.googleId
       }
     });
   } catch (error) {

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   FaTachometerAlt, FaCalendarAlt, FaClipboardList, FaUser, 
   FaClock, FaUsers, FaFileAlt, FaUserMd, FaHeartbeat, FaNotesMedical, FaEnvelope,
-  FaBars, FaTimes, FaFolder, FaChartBar
+  FaBars, FaTimes, FaFolder, FaChartBar, FaMailBulk
 } from 'react-icons/fa';
 import { useRole } from '../../context/RoleContext';
 import { USER_ROLES } from '../../utils/constants';
@@ -41,6 +41,7 @@ const Sidebar = () => {
     { path: '/admin/appointments', label: 'Appointments', icon: FaCalendarAlt },
     { path: '/admin/patient-arrivals', label: 'Patient Arrivals', icon: FaClock },
     { path: '/admin/doctor-verifications', label: 'Verify Doctors', icon: FaUserMd },
+    { path: '/admin/email-templates', label: 'Email Templates', icon: FaMailBulk },
     { path: '/admin/reports', label: 'Reports', icon: FaChartBar },
     { path: '/admin/logs', label: 'System Logs', icon: FaFileAlt }
   ];

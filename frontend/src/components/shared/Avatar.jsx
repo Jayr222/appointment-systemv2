@@ -23,13 +23,23 @@ const Avatar = ({ user, size = 'md', className = '', showName = false }) => {
       return user.avatar;
     }
     
-    // If it starts with /uploads, it's already a full path
-    if (user.avatar.startsWith('/uploads/')) {
-      return `${API_URL}${user.avatar}`;
+    // In production, if API_URL is set, use it (backend on different domain)
+    // In development, use relative path (proxy handles it)
+    const isProduction = import.meta.env.PROD;
+    
+    if (isProduction && API_URL) {
+      // Production with separate backend - use full backend URL
+      if (user.avatar.startsWith('/uploads/')) {
+        return `${API_URL}${user.avatar}`;
+      }
+      return `${API_URL}/uploads/avatars/${user.avatar}`;
     }
     
-    // Otherwise, construct the full URL
-    return `${API_URL}/uploads/avatars/${user.avatar}`;
+    // Development or production on same domain - use relative path
+    if (user.avatar.startsWith('/uploads/')) {
+      return user.avatar;
+    }
+    return `/uploads/avatars/${user.avatar}`;
   };
 
   const avatarUrl = getAvatarUrl();

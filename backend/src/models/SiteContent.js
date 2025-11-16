@@ -104,6 +104,44 @@ const siteContentSchema = new mongoose.Schema({
       type: String,
       default: '#0c1b4d'
     }
+  },
+
+  // Email Templates
+  emailTemplates: {
+    passwordReset: {
+      subject: {
+        type: String,
+        default: 'Password Reset Request'
+      },
+      greeting: {
+        type: String,
+        default: 'Hello'
+      },
+      body: {
+        type: String,
+        default: 'You requested to reset your password. Click the link below to reset it:'
+      },
+      buttonText: {
+        type: String,
+        default: 'Reset Password'
+      },
+      linkText: {
+        type: String,
+        default: 'Or copy and paste this link into your browser:'
+      },
+      expirationText: {
+        type: String,
+        default: 'This link will expire in 1 hour.'
+      },
+      footerText: {
+        type: String,
+        default: 'If you didn\'t request this, please ignore this email.'
+      },
+      organizationName: {
+        type: String,
+        default: 'Barangay Health Center'
+      }
+    }
   }
 }, {
   timestamps: true

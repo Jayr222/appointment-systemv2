@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { config } from '../config/env.js';
+import SiteContent from '../models/SiteContent.js';
 
 // Configure email transporter (example using Gmail)
 // In production, use environment variables for credentials
@@ -15,13 +16,29 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: emailUser,
     pass: emailPass
+  },
+  // Additional options for better compatibility
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
+// Verify transporter configuration
 if (!emailHost || !emailUser || !emailPass) {
   console.warn(
     '⚠️  Email transporter is running with incomplete credentials. Please set EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASS.'
   );
+} else {
+  // Verify connection on startup
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('❌ Email transporter verification failed:', error.message);
+      console.error('   Make sure EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASS are correct.');
+      console.error('   For Gmail, you need to use an App Password, not your regular password.');
+    } else {
+      console.log('✅ Email transporter verified successfully');
+    }
+  });
 }
 
 export const sendAppointmentConfirmation = async (email, appointmentDetails) => {
@@ -99,25 +116,78 @@ export const sendAppointmentCancellation = async (email, appointmentDetails) => 
 
 export const sendPasswordResetEmail = async (email, resetToken) => {
   try {
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    // Check if email credentials are configured
+    if (!emailUser || !emailPass) {
+      console.error('❌ Email credentials not configured. Please set EMAIL_USER and EMAIL_PASS in your .env file.');
+      return false;
+    }
+
+    // Get custom email template from SiteContent
+    let siteContent = await SiteContent.findOne();
+    if (!siteContent) {
+      siteContent = await SiteContent.create({});
+    }
+
+    const template = siteContent.emailTemplates?.passwordReset || {};
+    const primaryColor = siteContent.settings?.primaryColor || '#31694E';
+    const orgName = template.organizationName || siteContent.organizationName || 'Barangay Health Center';
+
+    // Use custom template values or defaults
+    const subject = template.subject || 'Password Reset Request';
+    const greeting = template.greeting || 'Hello';
+    const body = template.body || 'You requested to reset your password. Click the link below to reset it:';
+    const buttonText = template.buttonText || 'Reset Password';
+    const linkText = template.linkText || 'Or copy and paste this link into your browser:';
+    const expirationText = template.expirationText || 'This link will expire in 1 hour.';
+    const footerText = template.footerText || 'If you didn\'t request this, please ignore this email.';
+
+    const frontendUrl = config.FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
     
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `"${orgName}" <${emailUser}>`,
       to: email,
-      subject: 'Password Reset Request',
+      subject: subject,
       html: `
-        <h2>Password Reset Request</h2>
-        <p>Click the link below to reset your password:</p>
-        <a href="${resetUrl}">${resetUrl}</a>
-        <p>This link will expire in 1 hour.</p>
-        <p>If you didn't request this, please ignore this email.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: ${primaryColor}; margin-bottom: 20px;">${subject}</h2>
+          <p style="color: #333; font-size: 16px; line-height: 1.6;">${greeting},</p>
+          <p style="color: #333; font-size: 16px; line-height: 1.6;">${body}</p>
+          <p style="margin: 30px 0;">
+            <a href="${resetUrl}" style="background-color: ${primaryColor}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+              ${buttonText}
+            </a>
+          </p>
+          <p style="color: #666; font-size: 14px; margin-top: 20px;">${linkText}</p>
+          <p style="word-break: break-all; color: #666; font-size: 14px; background-color: #f5f5f5; padding: 10px; border-radius: 4px;">${resetUrl}</p>
+          <p style="color: #999; font-size: 12px; margin-top: 30px; line-height: 1.6;">
+            ${expirationText}<br>
+            ${footerText}
+          </p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="color: #999; font-size: 12px; text-align: center;">
+            ${orgName}
+          </p>
+        </div>
       `
     };
     
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Password reset email sent successfully to:', email);
+    console.log('   Message ID:', info.messageId);
     return true;
   } catch (error) {
-    console.error('Email sending error:', error);
+    console.error('❌ Email sending error:', error.message);
+    if (error.code === 'EAUTH') {
+      console.error('   Authentication failed. Check your EMAIL_USER and EMAIL_PASS.');
+      console.error('   For Gmail, make sure you\'re using an App Password, not your regular password.');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   Connection failed. Check your EMAIL_HOST and EMAIL_PORT.');
+    } else if (error.code === 'ETIMEDOUT') {
+      console.error('   Connection timed out. Check your network and email server settings.');
+    } else {
+      console.error('   Full error:', error);
+    }
     return false;
   }
 };

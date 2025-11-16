@@ -46,6 +46,7 @@ import PatientArrivals from './pages/admin/PatientArrivals';
 import SystemLogs from './pages/admin/SystemLogs';
 import DoctorVerifications from './pages/admin/DoctorVerifications';
 import Reports from './pages/admin/Reports';
+import EmailTemplates from './pages/admin/EmailTemplates';
 
 // Nurse Pages
 import NurseDashboard from './pages/nurse/Dashboard';
@@ -292,6 +293,16 @@ function App() {
                 <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
                   <AdminLayout>
                     <DoctorVerifications />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/email-templates"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+                  <AdminLayout>
+                    <EmailTemplates />
                   </AdminLayout>
                 </ProtectedRoute>
               }

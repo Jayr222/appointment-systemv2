@@ -366,7 +366,13 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    const user = await User.findOne({ email });
+    // Normalize email (lowercase and trim)
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await User.findOne({ 
+      email: normalizedEmail, 
+      isDeleted: { $ne: true } 
+    });
 
     // Don't reveal if user exists or not for security
     if (!user) {
@@ -392,6 +398,7 @@ export const forgotPassword = async (req, res) => {
       const emailSent = await sendPasswordResetEmail(user.email, resetToken);
       
       if (emailSent) {
+        console.log(`✅ Password reset email sent to: ${user.email}`);
         res.status(200).json({ 
           message: 'If an account with that email exists, a password reset link has been sent.' 
         });
@@ -401,7 +408,10 @@ export const forgotPassword = async (req, res) => {
         user.resetPasswordExpire = undefined;
         await user.save({ validateBeforeSave: false });
         
-        res.status(500).json({ message: 'Email could not be sent. Please try again later.' });
+        console.error(`❌ Failed to send password reset email to: ${user.email}`);
+        res.status(500).json({ 
+          message: 'Email could not be sent. Please check your email configuration or try again later.' 
+        });
       }
     } catch (emailError) {
       // Reset token fields if email fails
@@ -409,8 +419,10 @@ export const forgotPassword = async (req, res) => {
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
       
-      console.error('Email sending error:', emailError);
-      res.status(500).json({ message: 'Email could not be sent. Please try again later.' });
+      console.error('❌ Email sending error in controller:', emailError);
+      res.status(500).json({ 
+        message: 'Email could not be sent. Please check your email configuration or try again later.' 
+      });
     }
   } catch (error) {
     console.error('Forgot password error:', error);
@@ -439,7 +451,8 @@ export const resetPassword = async (req, res) => {
     // Find user with valid token
     const user = await User.findOne({
       resetPasswordToken,
-      resetPasswordExpire: { $gt: Date.now() }
+      resetPasswordExpire: { $gt: Date.now() },
+      isDeleted: { $ne: true }
     });
 
     if (!user) {

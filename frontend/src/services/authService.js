@@ -115,8 +115,8 @@ export const authService = {
     return response.data;
   },
 
-  connectGoogleAccount: async (idToken) => {
-    const response = await api.post('/auth/google/connect', { idToken });
+  connectGoogleAccount: async (idToken, password) => {
+    const response = await api.post('/auth/google/connect', { idToken, password });
     return response.data;
   },
 
