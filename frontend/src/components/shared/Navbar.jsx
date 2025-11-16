@@ -1,4 +1,5 @@
 import React from 'react';
+import { FaBars } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useSidebar } from '../../context/SidebarContext';
@@ -20,7 +21,7 @@ const Navbar = () => {
   const mdLeftClass = isCollapsed ? 'md:left-20' : 'md:left-64';
 
   return (
-    <nav className={`shadow-md fixed top-0 right-0 z-10 border-b border-white border-opacity-20 transition-all duration-300 left-0 ${mdLeftClass}`} style={{ backgroundColor: '#31694E' }}>
+    <nav className={`shadow-md fixed top-0 right-0 z-40 border-b border-white border-opacity-20 transition-all duration-300 left-0 ${mdLeftClass}`} style={{ backgroundColor: '#31694E' }}>
       <div className="px-4 md:px-6 py-3 md:py-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <button
@@ -29,7 +30,7 @@ const Navbar = () => {
             aria-label="Toggle sidebar"
           >
             <span className="sr-only">Toggle sidebar</span>
-            ☰
+            <FaBars className="w-5 h-5" />
           </button>
           <h2 className="text-xl md:text-2xl font-bold text-white">
             {user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1)} Dashboard

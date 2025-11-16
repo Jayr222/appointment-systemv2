@@ -198,3 +198,34 @@
   animation: scaleIn 0.3s ease-out;
 }
 
+
+/* Responsive utilities for sidebar/backdrop and fluid headings */
+.sidebar-drawer {
+  transform: translateX(-100%);
+  transition: transform 200ms ease-in-out;
+}
+.sidebar-drawer.open {
+  transform: translateX(0);
+}
+@media (min-width: 768px) {
+  .sidebar-drawer {
+    transform: none; /* Always visible on md+; Tailwind width still applies */
+  }
+}
+
+.mobile-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 30;
+}
+@media (min-width: 768px) {
+  .mobile-backdrop {
+    display: none; /* Backdrop only on mobile */
+  }
+}
+
+.fluid-title {
+  font-size: clamp(1.125rem, 2vw + 0.5rem, 1.5rem);
+  line-height: 1.25;
+}
