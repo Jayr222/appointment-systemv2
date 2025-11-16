@@ -198,15 +198,48 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Debug middleware to log all incoming requests (only in Vercel for debugging)
+if (process.env.VERCEL) {
+  app.use((req, res, next) => {
+    console.log('🔍 Express received request:', {
+      method: req.method,
+      url: req.url,
+      path: req.path,
+      originalUrl: req.originalUrl,
+      baseUrl: req.baseUrl
+    });
+    next();
+  });
+}
+
 // 404 handler - log what route was requested
 app.use((req, res) => {
   console.log('❌ 404 - Route not found:', req.method, req.originalUrl || req.url);
   console.log('   Path:', req.path);
   console.log('   URL:', req.url);
   console.log('   Original URL:', req.originalUrl);
+  console.log('   Base URL:', req.baseUrl);
   console.log('   Query:', req.query);
   console.log('   All routes should start with /api');
-  console.log('   Registered routes include: POST /api/auth/avatar, GET /api/auth/test');
+  console.log('   Registered routes include:');
+  console.log('     - /api/auth/*');
+  console.log('     - /api/doctor/availability/*');
+  console.log('     - /api/doctor/*');
+  console.log('     - /api/messages/*');
+  console.log('     - /api/patient/*');
+  
+  // List all registered routes for debugging
+  if (app._router && app._router.stack) {
+    console.log('   Express router stack:');
+    app._router.stack.forEach((middleware, i) => {
+      if (middleware.route) {
+        console.log(`     [${i}] ${middleware.route.stack[0].method.toUpperCase()} ${middleware.route.path}`);
+      } else if (middleware.regexp) {
+        console.log(`     [${i}] ${middleware.name || 'middleware'} - regex: ${middleware.regexp}`);
+      }
+    });
+  }
+  
   res.status(404).json({ 
     success: false, 
     message: 'Route not found',
@@ -214,6 +247,7 @@ app.use((req, res) => {
     path: req.path,
     url: req.url,
     originalUrl: req.originalUrl,
+    baseUrl: req.baseUrl,
     hint: 'Check if the route is registered and the URL path is correct'
   });
 });

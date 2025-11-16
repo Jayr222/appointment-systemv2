@@ -3,25 +3,46 @@ import app from '../backend/src/server.js';
 
 // Vercel serverless function handler
 // Vercel's rewrite rule: /api/(.*) -> /api/index.js
-// The captured group (.*) is passed, which might be:
-// - "doctor/availability" (no leading slash, no /api prefix)
-// - "/doctor/availability" (with leading slash, no /api prefix)  
-// - "/api/doctor/availability" (full path - less likely but possible)
+// When Vercel rewrites, it may pass the path in different ways
 export default async (req, res) => {
   // Set VERCEL env var for Express middleware
   if (!process.env.VERCEL) {
     process.env.VERCEL = '1';
   }
   
-  // Get the incoming URL - Vercel might pass it in different formats
-  let incomingUrl = req.url || req.originalUrl || '';
+  // Check Vercel-specific headers for the original path
+  // Vercel may pass the original path in x-vercel-rewrite or x-invoke-path headers
+  const vercelPath = req.headers['x-invoke-path'] || req.headers['x-vercel-rewrite'] || req.headers['x-vercel-original-path'];
   
+  // Get the incoming URL - try multiple sources
+  let incomingUrl = vercelPath || req.url || req.originalUrl || '';
+  
+  // Log all available information for debugging
   console.log('🔍 Serverless function received:', {
     method: req.method,
     url: req.url,
     originalUrl: req.originalUrl,
-    incomingUrl: incomingUrl
+    vercelPath: vercelPath,
+    incomingUrl: incomingUrl,
+    headers: {
+      'x-invoke-path': req.headers['x-invoke-path'],
+      'x-vercel-rewrite': req.headers['x-vercel-rewrite'],
+      'x-vercel-original-path': req.headers['x-vercel-original-path']
+    }
   });
+  
+  // If we still don't have a URL, this is a problem
+  if (!incomingUrl) {
+    console.error('❌ No URL found in request!');
+    return res.status(500).json({ 
+      error: 'Internal server error: No URL found',
+      debug: {
+        url: req.url,
+        originalUrl: req.originalUrl,
+        headers: Object.keys(req.headers)
+      }
+    });
+  }
   
   // Handle different cases of what Vercel might pass
   let finalUrl = incomingUrl;
@@ -31,6 +52,10 @@ export default async (req, res) => {
     // Already correct, but ensure originalUrl is set
     if (!req.originalUrl) {
       req.originalUrl = finalUrl;
+    }
+    // Ensure req.url matches
+    if (req.url !== finalUrl) {
+      req.url = finalUrl;
     }
   }
   // Case 2: URL starts with / but not /api (e.g., "/doctor/availability")
@@ -59,12 +84,16 @@ export default async (req, res) => {
     if (!req.originalUrl) {
       req.originalUrl = finalUrl;
     }
+    if (req.url !== finalUrl) {
+      req.url = finalUrl;
+    }
   }
   
   console.log('📤 Final URL passed to Express:', {
     method: req.method,
     url: req.url,
-    originalUrl: req.originalUrl
+    originalUrl: req.originalUrl,
+    path: req.path
   });
   
   // Pass request to Express
