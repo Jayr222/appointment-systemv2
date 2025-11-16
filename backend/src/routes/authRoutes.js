@@ -26,7 +26,12 @@ router.post('/forgot-password', formSubmissionLimiter({ windowMs: 60 * 1000, mes
 router.put('/reset-password/:token', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'Please wait before trying again' }), resetPassword);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
-router.post('/avatar', protect, (req, res, next) => {
+router.post('/avatar', protect, async (req, res, next) => {
+  console.log('Avatar upload route hit');
+  console.log('Request method:', req.method);
+  console.log('Request URL:', req.url);
+  console.log('Content-Type:', req.headers['content-type']);
+  
   uploadAvatarMiddleware.single('avatar')(req, res, (err) => {
     if (err) {
       console.error('Multer upload error:', err);
@@ -37,6 +42,17 @@ router.post('/avatar', protect, (req, res, next) => {
         return res.status(400).json({ message: err.message });
       }
       return res.status(400).json({ message: 'File upload error. Please try again.' });
+    }
+    console.log('File received:', req.file ? 'Yes' : 'No');
+    if (req.file) {
+      console.log('File details:', {
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        hasBuffer: !!req.file.buffer,
+        hasFilename: !!req.file.filename
+      });
     }
     next();
   });
