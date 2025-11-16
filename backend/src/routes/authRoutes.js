@@ -38,7 +38,17 @@ router.post('/test', (req, res) => {
   });
 });
 
+// Register route - POST only
 router.post('/register', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'Please wait before registering again' }), register);
+
+// Helpful message for GET requests to register (browsers sometimes do this)
+router.get('/register', (req, res) => {
+  res.status(405).json({ 
+    success: false,
+    message: 'Method not allowed. Registration requires POST request.',
+    hint: 'Use POST /api/auth/register with user data in the request body'
+  });
+});
 router.post('/login', loginAttemptLimiter(), login);
 router.post('/forgot-password', formSubmissionLimiter({ windowMs: 60 * 1000, message: 'Please wait before requesting another reset link' }), forgotPassword);
 router.put('/reset-password/:token', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'Please wait before trying again' }), resetPassword);
