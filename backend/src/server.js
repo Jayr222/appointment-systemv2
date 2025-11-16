@@ -71,6 +71,7 @@ if (fs.existsSync(uploadsPath) && !process.env.VERCEL) {
 } else {
   // On Vercel/serverless: serve files via API route (for filesystem-based avatars)
   // Note: Avatars uploaded on serverless are stored as base64 data URLs in the database
+  // Old avatars stored as filenames won't exist on serverless - return 404 gracefully
   app.get('/uploads/avatars/:filename', async (req, res) => {
     try {
       const { filename } = req.params;
@@ -79,12 +80,18 @@ if (fs.existsSync(uploadsPath) && !process.env.VERCEL) {
       if (fs.existsSync(filePath)) {
         return res.sendFile(filePath);
       }
-      // If file doesn't exist, it might be stored as base64 in database
-      // The avatar URL in the database will be the data URL itself
-      res.status(404).json({ message: 'File not found' });
+      // File doesn't exist - this is expected for old avatars on serverless
+      // Return 404 with proper headers so browser can handle it gracefully
+      res.status(404).set('Content-Type', 'application/json').json({ 
+        message: 'Avatar file not found. This avatar may have been uploaded before serverless deployment.',
+        error: 'File not found'
+      });
     } catch (error) {
-      console.error('Error serving file:', error);
-      res.status(500).json({ message: 'Error serving file' });
+      console.error('Error serving avatar file:', error);
+      res.status(500).set('Content-Type', 'application/json').json({ 
+        message: 'Error serving file',
+        error: 'Internal server error'
+      });
     }
   });
 }

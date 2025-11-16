@@ -18,6 +18,11 @@ const Avatar = ({ user, size = 'md', className = '', showName = false }) => {
   const getAvatarUrl = () => {
     if (!user?.avatar) return null;
     
+    // If it's a base64 data URL (stored in database for serverless), return as is
+    if (user.avatar.startsWith('data:')) {
+      return user.avatar;
+    }
+    
     // If it's already a full URL (Google OAuth), return as is
     if (user.avatar.startsWith('http://') || user.avatar.startsWith('https://')) {
       return user.avatar;
@@ -45,29 +50,27 @@ const Avatar = ({ user, size = 'md', className = '', showName = false }) => {
   const avatarUrl = getAvatarUrl();
   const initials = user?.name?.charAt(0)?.toUpperCase() || '?';
 
+  const [imageError, setImageError] = React.useState(false);
+
   return (
     <div className={`relative ${className}`}>
       <div className={`${sizeClass} rounded-full flex items-center justify-center overflow-hidden bg-blue-500 text-white relative`}>
-        {avatarUrl ? (
+        {avatarUrl && !imageError ? (
           <img
             src={avatarUrl}
             alt={user?.name || 'Avatar'}
             className="w-full h-full object-cover"
-            onError={(e) => {
+            onError={() => {
               // Fallback to initials if image fails to load
-              e.target.style.display = 'none';
-              const fallback = e.target.parentElement.querySelector('.avatar-fallback');
-              if (fallback) fallback.style.display = 'flex';
+              setImageError(true);
             }}
           />
         ) : null}
-        {!avatarUrl && (
-          <div
-            className="avatar-fallback w-full h-full bg-blue-500 text-white flex items-center justify-center font-semibold absolute inset-0"
-          >
-            {initials}
-          </div>
-        )}
+        <div
+          className={`avatar-fallback w-full h-full bg-blue-500 text-white flex items-center justify-center font-semibold absolute inset-0 ${avatarUrl && !imageError ? 'hidden' : ''}`}
+        >
+          {initials}
+        </div>
       </div>
       {showName && user?.name && (
         <p className="text-xs text-gray-600 mt-1 text-center truncate max-w-full">
