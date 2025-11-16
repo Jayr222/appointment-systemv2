@@ -26,7 +26,7 @@ export const config = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback',
+  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'https://appointment-systemv2.vercel.app/api/auth/google/callback',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   DEFAULT_ADMIN_EMAIL: process.env.DEFAULT_ADMIN_EMAIL || 'admin@healthcenter.com',
   DEFAULT_ADMIN_PASSWORD: process.env.DEFAULT_ADMIN_PASSWORD || 'admin123',
