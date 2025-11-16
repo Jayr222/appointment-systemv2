@@ -72,19 +72,10 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Backdrop on mobile when sidebar is open */}
-      {mobileOpen && (
-        <div
-          className="mobile-backdrop"
-          onClick={toggleSidebar}
-          aria-hidden="true"
-        />
-      )}
-
       <div 
         className={`sidebar-drawer ${mobileOpen ? 'open' : ''} text-white h-screen fixed left-0 top-0 shadow-lg flex flex-col ${
           isCollapsed ? 'w-20 md:w-20' : 'w-64 md:w-64'
-        } md:translate-x-0 z-20 md:z-auto bg-[#31694E]`}
+        } md:translate-x-0 z-20 md:z-auto bg-[#31694E] ${mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'} md:pointer-events-auto`}
         style={{ backgroundColor: '#31694E' }}
       >
       {/* Header with Logo and Toggle */}
