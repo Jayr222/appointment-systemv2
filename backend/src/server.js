@@ -138,20 +138,27 @@ app.use('/api/auth', (req, res, next) => {
 });
 
 // Path normalization for Vercel serverless functions
-// Note: Path normalization is now handled in api/index.js before the request reaches Express
-// This middleware is kept as a fallback but should rarely be needed
+// Note: Path normalization is primarily handled in api/index.js before the request reaches Express
+// This middleware is a safety net in case the serverless function handler didn't normalize
 if (process.env.VERCEL) {
   app.use((req, res, next) => {
+    const currentUrl = req.url || '';
+    
     // Only normalize if the path doesn't already start with /api
-    // The api/index.js handler should have already normalized it
-    const currentUrl = req.url || req.path || '';
-    if (currentUrl && !currentUrl.startsWith('/api') && !currentUrl.startsWith('/health') && !currentUrl.startsWith('/uploads')) {
+    // This should rarely be needed since api/index.js handles it
+    if (currentUrl && 
+        !currentUrl.startsWith('/api') && 
+        !currentUrl.startsWith('/health') && 
+        !currentUrl.startsWith('/uploads') &&
+        !currentUrl.startsWith('/socket.io')) {
       const queryString = currentUrl.includes('?') ? currentUrl.substring(currentUrl.indexOf('?')) : '';
       const pathOnly = currentUrl.split('?')[0];
       const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
       req.url = '/api' + normalizedPath + queryString;
+      req.originalUrl = req.url;
       console.log('🔄 Fallback path normalization:', currentUrl, '->', req.url);
     }
+    
     next();
   });
 }

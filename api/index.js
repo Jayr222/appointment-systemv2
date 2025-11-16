@@ -2,48 +2,66 @@
 import app from '../backend/src/server.js';
 
 // Vercel serverless function handler
-// Vercel's rewrite rule: /api/:path* -> /api/index.js
-// When this happens, req.url might be the captured path segment (without /api)
-// We need to reconstruct the full path with /api prefix
+// Vercel's rewrite rule: /api/(.*) -> /api/index.js
+// The captured group (.*) is passed, which might be:
+// - "doctor/availability" (no leading slash, no /api prefix)
+// - "/doctor/availability" (with leading slash, no /api prefix)  
+// - "/api/doctor/availability" (full path - less likely but possible)
 export default async (req, res) => {
   // Set VERCEL env var for Express middleware
   if (!process.env.VERCEL) {
     process.env.VERCEL = '1';
   }
   
-  // Log incoming request for debugging
-  const originalUrl = req.url || '';
-  const originalOriginalUrl = req.originalUrl || '';
+  // Get the incoming URL - Vercel might pass it in different formats
+  let incomingUrl = req.url || req.originalUrl || '';
   
-  console.log('🔍 Serverless function received (before fix):', {
+  console.log('🔍 Serverless function received:', {
     method: req.method,
-    url: originalUrl,
-    originalUrl: originalOriginalUrl,
-    path: req.path
+    url: req.url,
+    originalUrl: req.originalUrl,
+    incomingUrl: incomingUrl
   });
   
-  // Reconstruct the full path
-  // If the URL doesn't start with /api, it's likely the captured path segment
-  // We need to add /api back to it
-  let finalUrl = originalUrl || originalOriginalUrl || '';
+  // Handle different cases of what Vercel might pass
+  let finalUrl = incomingUrl;
   
-  if (finalUrl && !finalUrl.startsWith('/api') && !finalUrl.startsWith('/health') && !finalUrl.startsWith('/uploads')) {
-    // This is the captured path segment, add /api prefix
+  // Case 1: URL already has /api prefix - use as is
+  if (finalUrl.startsWith('/api')) {
+    // Already correct, but ensure originalUrl is set
+    if (!req.originalUrl) {
+      req.originalUrl = finalUrl;
+    }
+  }
+  // Case 2: URL starts with / but not /api (e.g., "/doctor/availability")
+  else if (finalUrl.startsWith('/')) {
+    // Add /api prefix
     const queryString = finalUrl.includes('?') ? finalUrl.substring(finalUrl.indexOf('?')) : '';
     const pathOnly = finalUrl.split('?')[0];
-    finalUrl = '/api' + (pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly) + queryString;
-    
-    // Update req properties
+    finalUrl = '/api' + pathOnly + queryString;
     req.url = finalUrl;
     req.originalUrl = finalUrl;
-    
-    console.log('🔄 Reconstructed path:', originalUrl, '->', finalUrl);
-  } else if (!req.originalUrl && req.url) {
-    // Ensure originalUrl is set
-    req.originalUrl = req.url;
+    console.log('🔄 Added /api prefix:', incomingUrl, '->', finalUrl);
+  }
+  // Case 3: URL has no leading slash (e.g., "doctor/availability")
+  else if (finalUrl && !finalUrl.startsWith('/')) {
+    // Add leading slash and /api prefix
+    const queryString = finalUrl.includes('?') ? finalUrl.substring(finalUrl.indexOf('?')) : '';
+    const pathOnly = finalUrl.split('?')[0];
+    finalUrl = '/api/' + pathOnly + queryString;
+    req.url = finalUrl;
+    req.originalUrl = finalUrl;
+    console.log('🔄 Added / and /api prefix:', incomingUrl, '->', finalUrl);
+  }
+  // Case 4: Special routes that shouldn't have /api
+  else if (finalUrl.startsWith('/health') || finalUrl.startsWith('/uploads')) {
+    // Keep as is
+    if (!req.originalUrl) {
+      req.originalUrl = finalUrl;
+    }
   }
   
-  console.log('📤 Passing to Express:', {
+  console.log('📤 Final URL passed to Express:', {
     method: req.method,
     url: req.url,
     originalUrl: req.originalUrl
