@@ -26,7 +26,21 @@ router.post('/forgot-password', formSubmissionLimiter({ windowMs: 60 * 1000, mes
 router.put('/reset-password/:token', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'Please wait before trying again' }), resetPassword);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
-router.post('/avatar', protect, uploadAvatarMiddleware.single('avatar'), uploadAvatar);
+router.post('/avatar', protect, (req, res, next) => {
+  uploadAvatarMiddleware.single('avatar')(req, res, (err) => {
+    if (err) {
+      console.error('Multer upload error:', err);
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'File size too large. Maximum size is 2MB.' });
+      }
+      if (err.message && err.message.includes('Only image files')) {
+        return res.status(400).json({ message: err.message });
+      }
+      return res.status(400).json({ message: 'File upload error. Please try again.' });
+    }
+    next();
+  });
+}, uploadAvatar);
 router.put('/change-password', protect, changePassword);
 router.put('/change-email', protect, changeEmail);
 router.put('/change-phone', protect, changePhone);

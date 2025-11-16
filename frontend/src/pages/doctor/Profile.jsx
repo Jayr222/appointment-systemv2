@@ -554,12 +554,18 @@ const Profile = () => {
                     if (file) {
                       setAvatarLoading(true);
                       try {
+                        setMessage('');
                         const response = await authService.uploadAvatar(file);
-                        updateProfile({ ...user, avatar: response.user.avatar });
+                        updateProfile({ ...user, avatar: response.user?.avatar || response.avatar });
                         setMessage('Avatar updated successfully');
+                        // Clear the file input
+                        e.target.value = '';
                       } catch (error) {
                         console.error('Error uploading avatar:', error);
-                        setMessage('Failed to upload avatar');
+                        const errorMessage = error.response?.data?.message || error.message || 'Failed to upload avatar. Please try again.';
+                        setMessage(errorMessage);
+                        // Clear the file input
+                        e.target.value = '';
                       } finally {
                         setAvatarLoading(false);
                       }

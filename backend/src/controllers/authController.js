@@ -270,7 +270,13 @@ export const updateProfile = async (req, res) => {
 export const uploadAvatar = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+      console.error('Upload avatar: No file received');
+      return res.status(400).json({ message: 'No file uploaded. Please select an image file.' });
+    }
+
+    // Check file size (2MB limit)
+    if (req.file.size > 2 * 1024 * 1024) {
+      return res.status(400).json({ message: 'File size too large. Maximum size is 2MB.' });
     }
 
     const user = await User.findById(req.user.id);
@@ -283,8 +289,12 @@ export const uploadAvatar = async (req, res) => {
 
     if (isServerless) {
       // On serverless (Vercel): Convert to base64 data URL and store in database
+      if (!req.file.buffer) {
+        console.error('Upload avatar: No buffer in file object on serverless');
+        return res.status(500).json({ message: 'File processing error. Please try again.' });
+      }
       const base64 = req.file.buffer.toString('base64');
-      const mimeType = req.file.mimetype;
+      const mimeType = req.file.mimetype || 'image/jpeg';
       avatarValue = `data:${mimeType};base64,${base64}`;
     } else {
       // On local dev: Store filename and use filesystem
@@ -298,7 +308,8 @@ export const uploadAvatar = async (req, res) => {
           console.error('Error deleting old avatar:', error);
         }
       }
-      avatarValue = req.file.filename;
+      const fileExt = req.file.originalname ? path.extname(req.file.originalname) : '.jpg';
+      avatarValue = req.file.filename || `avatar-${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExt}`;
     }
 
     // Update user with new avatar
@@ -314,18 +325,31 @@ export const uploadAvatar = async (req, res) => {
       // Return the data URL directly
       avatarUrl = avatarValue;
     } else {
-      // Return the file path
-      avatarUrl = `/uploads/avatars/${req.file.filename}`;
+      // Return the file path (filename is set when using disk storage)
+      const filename = req.file.filename || req.file.originalname;
+      avatarUrl = `/uploads/avatars/${filename}`;
     }
+
+    // Update user object in response (remove password)
+    const userResponse = user.toObject();
+    delete userResponse.password;
 
     res.json({
       success: true,
       avatar: avatarUrl,
-      user
+      user: userResponse
     });
   } catch (error) {
     console.error('Upload avatar error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    res.status(500).json({ 
+      message: error.message || 'Server error while uploading avatar',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
