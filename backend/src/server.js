@@ -46,6 +46,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Log all requests for debugging
+app.use((req, res, next) => {
+  if (req.path.includes('/api/auth/avatar')) {
+    console.log('🌐 Incoming request:', req.method, req.path, req.url, req.headers['content-type']);
+  }
+  next();
+});
+
 // Trust proxy for accurate IP addresses (if behind reverse proxy)
 app.set('trust proxy', 1);
 
@@ -81,8 +89,17 @@ if (fs.existsSync(uploadsPath) && !process.env.VERCEL) {
   });
 }
 
+// Log all incoming requests to /api/auth for debugging
+app.use('/api/auth', (req, res, next) => {
+  console.log('🔍 /api/auth request:', req.method, req.path, req.url);
+  console.log('   Full URL:', req.originalUrl || req.url);
+  next();
+});
+
 // Routes
+console.log('🚀 Registering /api/auth routes...');
 app.use('/api/auth', authRoutes);
+console.log('✅ /api/auth routes registered');
 app.use('/api/auth/google', googleAuthRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api/doctor', doctorRoutes);
