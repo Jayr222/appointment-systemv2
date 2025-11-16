@@ -137,6 +137,21 @@ app.use('/api/auth', (req, res, next) => {
   next();
 });
 
+// Path normalization for Vercel serverless functions
+// Vercel's rewrite rule may strip the /api prefix, so we ensure it's always present
+if (process.env.VERCEL) {
+  app.use((req, res, next) => {
+    if (!req.url.startsWith('/api') && !req.path.startsWith('/api')) {
+      const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+      const pathOnly = req.url.split('?')[0];
+      const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
+      req.url = '/api' + normalizedPath + queryString;
+      console.log('🔄 Vercel path normalization:', req.originalUrl, '->', req.url);
+    }
+    next();
+  });
+}
+
 // Routes
 console.log('🚀 Registering /api/auth routes...');
 app.use('/api/auth', authRoutes);
