@@ -90,12 +90,10 @@ router.post('/2fa/verify', protect, verify2FA);
 router.post('/2fa/disable', protect, disable2FA);
 
 // Debug: Log registered routes on startup
-if (process.env.NODE_ENV !== 'production') {
-  console.log('📋 Auth routes registered:');
-  console.log('   GET  /api/auth/test (no auth)');
-  console.log('   GET  /api/auth/avatar/test (auth required)');
-  console.log('   POST /api/auth/avatar (auth required)');
-}
+console.log('📋 Auth routes registered:');
+console.log('   GET  /api/auth/test (no auth)');
+console.log('   GET  /api/auth/avatar/test (auth required)');
+console.log('   POST /api/auth/avatar (auth required)');
 
 export default router;
 

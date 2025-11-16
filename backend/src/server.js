@@ -121,6 +121,7 @@ app.use('/api/auth', (req, res, next) => {
 console.log('🚀 Registering /api/auth routes...');
 app.use('/api/auth', authRoutes);
 console.log('✅ /api/auth routes registered');
+console.log('   Available routes: POST /api/auth/avatar, GET /api/auth/test, etc.');
 app.use('/api/auth/google', googleAuthRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api/doctor', doctorRoutes);
