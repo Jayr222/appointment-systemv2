@@ -39,6 +39,11 @@ router.get('/avatar/test', protect, (req, res) => {
 
 // Avatar upload route with proper middleware chain
 router.post('/avatar', 
+  // First, just log that we reached this route (before protect middleware)
+  (req, res, next) => {
+    console.log('🟢 POST /avatar route hit - BEFORE protect middleware');
+    next();
+  },
   protect, 
   (req, res, next) => {
     console.log('🔵 Avatar upload route - Multer middleware starting');
@@ -48,6 +53,7 @@ router.post('/avatar',
     console.log('   Original URL:', req.originalUrl);
     console.log('   Content-Type:', req.headers['content-type']);
     console.log('   Has Authorization:', !!req.headers.authorization);
+    console.log('   User:', req.user?.id);
     
     uploadAvatarMiddleware.single('avatar')(req, res, (err) => {
       if (err) {
