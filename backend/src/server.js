@@ -138,16 +138,41 @@ app.use('/api/auth', (req, res, next) => {
 });
 
 // Path normalization for Vercel serverless functions
-// Vercel's rewrite rule may strip the /api prefix, so we ensure it's always present
+// Vercel's rewrite rule sends /api/:path* to /api/index.js
+// The req.url might already include /api or might not, so we normalize it
 if (process.env.VERCEL) {
   app.use((req, res, next) => {
-    if (!req.url.startsWith('/api') && !req.path.startsWith('/api')) {
-      const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
-      const pathOnly = req.url.split('?')[0];
+    // Log the incoming request for debugging
+    console.log('📥 Vercel request (before normalization):', {
+      method: req.method,
+      url: req.url,
+      path: req.path,
+      originalUrl: req.originalUrl
+    });
+    
+    // Get the current URL - prefer originalUrl as it contains the full path before any modifications
+    const currentUrl = req.originalUrl || req.url || '';
+    const queryString = currentUrl.includes('?') ? currentUrl.substring(currentUrl.indexOf('?')) : '';
+    const pathOnly = currentUrl.split('?')[0];
+    
+    // If the path doesn't start with /api, add it
+    // This handles the case where Vercel might strip /api from the path
+    if (!pathOnly.startsWith('/api')) {
       const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
       req.url = '/api' + normalizedPath + queryString;
-      console.log('🔄 Vercel path normalization:', req.originalUrl, '->', req.url);
+      console.log('🔄 Vercel path normalization:', currentUrl, '->', req.url);
     }
+    // If it already starts with /api, ensure req.url is set correctly
+    else if (req.url !== pathOnly + queryString) {
+      req.url = pathOnly + queryString;
+    }
+    
+    console.log('📤 Vercel request (after normalization):', {
+      method: req.method,
+      url: req.url,
+      path: req.path
+    });
+    
     next();
   });
 }
