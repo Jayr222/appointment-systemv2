@@ -24,17 +24,25 @@ router.post('/register', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'P
 router.post('/login', loginAttemptLimiter(), login);
 router.post('/forgot-password', formSubmissionLimiter({ windowMs: 60 * 1000, message: 'Please wait before requesting another reset link' }), forgotPassword);
 router.put('/reset-password/:token', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'Please wait before trying again' }), resetPassword);
+// Test route to verify routing works
+router.get('/avatar/test', protect, (req, res) => {
+  res.json({ message: 'Avatar route is accessible', user: req.user.id });
+});
+
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
-router.post('/avatar', protect, async (req, res, next) => {
-  console.log('Avatar upload route hit');
-  console.log('Request method:', req.method);
-  console.log('Request URL:', req.url);
-  console.log('Content-Type:', req.headers['content-type']);
+router.post('/avatar', protect, (req, res, next) => {
+  console.log('🔵 Avatar upload route - Middleware hit');
+  console.log('   Method:', req.method);
+  console.log('   URL:', req.url);
+  console.log('   Path:', req.path);
+  console.log('   Original URL:', req.originalUrl);
+  console.log('   Content-Type:', req.headers['content-type']);
+  console.log('   Has Authorization:', !!req.headers.authorization);
   
   uploadAvatarMiddleware.single('avatar')(req, res, (err) => {
     if (err) {
-      console.error('Multer upload error:', err);
+      console.error('❌ Multer upload error:', err);
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ message: 'File size too large. Maximum size is 2MB.' });
       }
@@ -43,9 +51,9 @@ router.post('/avatar', protect, async (req, res, next) => {
       }
       return res.status(400).json({ message: 'File upload error. Please try again.' });
     }
-    console.log('File received:', req.file ? 'Yes' : 'No');
+    console.log('✅ File received:', req.file ? 'Yes' : 'No');
     if (req.file) {
-      console.log('File details:', {
+      console.log('   File details:', {
         fieldname: req.file.fieldname,
         originalname: req.file.originalname,
         mimetype: req.file.mimetype,

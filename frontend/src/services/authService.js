@@ -78,8 +78,25 @@ export const authService = {
     const formData = new FormData();
     formData.append('avatar', file);
     // Don't set Content-Type - axios will set it automatically with boundary for FormData
-    const response = await api.post('/auth/avatar', formData);
-    return response.data;
+    console.log('📤 Uploading avatar to:', '/auth/avatar');
+    console.log('   Base URL:', api.defaults.baseURL);
+    console.log('   Full URL will be:', api.defaults.baseURL + '/auth/avatar');
+    console.log('   File name:', file.name);
+    console.log('   File size:', file.size);
+    console.log('   File type:', file.type);
+    try {
+      const response = await api.post('/auth/avatar', formData);
+      console.log('✅ Avatar upload successful');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Avatar upload error:', error);
+      console.error('   Status:', error.response?.status);
+      console.error('   Status Text:', error.response?.statusText);
+      console.error('   Response Data:', error.response?.data);
+      console.error('   Request URL:', error.config?.url);
+      console.error('   Full URL:', error.config?.baseURL + error.config?.url);
+      throw error;
+    }
   },
 
   changePassword: async (currentPassword, newPassword) => {

@@ -269,8 +269,14 @@ export const updateProfile = async (req, res) => {
 // @access  Private
 export const uploadAvatar = async (req, res) => {
   try {
+    console.log('🟢 uploadAvatar controller called');
+    console.log('   User ID:', req.user?.id);
+    console.log('   Has file:', !!req.file);
+    
     if (!req.file) {
-      console.error('Upload avatar: No file received');
+      console.error('❌ Upload avatar: No file received');
+      console.log('   Request body keys:', Object.keys(req.body || {}));
+      console.log('   Request files:', Object.keys(req.files || {}));
       return res.status(400).json({ message: 'No file uploaded. Please select an image file.' });
     }
 
