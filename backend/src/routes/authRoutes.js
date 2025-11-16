@@ -104,7 +104,10 @@ router.post('/2fa/disable', protect, disable2FA);
 
 // Debug: Log registered routes on startup
 console.log('📋 Auth routes registered:');
+console.log('   POST /api/auth/register (no auth)');
+console.log('   POST /api/auth/login (no auth)');
 console.log('   GET  /api/auth/test (no auth)');
+console.log('   GET  /api/auth/me (auth required)');
 console.log('   GET  /api/auth/avatar/test (auth required)');
 console.log('   POST /api/auth/avatar (auth required)');
 
