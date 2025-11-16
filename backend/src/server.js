@@ -155,13 +155,19 @@ app.get('/health', (req, res) => {
 app.use((req, res) => {
   console.log('❌ 404 - Route not found:', req.method, req.originalUrl || req.url);
   console.log('   Path:', req.path);
+  console.log('   URL:', req.url);
+  console.log('   Original URL:', req.originalUrl);
+  console.log('   Query:', req.query);
   console.log('   All routes should start with /api');
+  console.log('   Registered routes include: POST /api/auth/avatar, GET /api/auth/test');
   res.status(404).json({ 
     success: false, 
     message: 'Route not found',
     method: req.method,
     path: req.path,
-    url: req.url
+    url: req.url,
+    originalUrl: req.originalUrl,
+    hint: 'Check if the route is registered and the URL path is correct'
   });
 });
 

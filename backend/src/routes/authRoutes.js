@@ -25,6 +25,19 @@ router.get('/test', (req, res) => {
   res.json({ message: 'Auth routes are working!', timestamp: new Date().toISOString() });
 });
 
+// Test POST route to verify POST requests work
+router.post('/test', (req, res) => {
+  res.json({ 
+    message: 'POST requests are working!', 
+    timestamp: new Date().toISOString(),
+    body: req.body,
+    headers: {
+      'content-type': req.headers['content-type'],
+      'authorization': req.headers['authorization'] ? 'present' : 'missing'
+    }
+  });
+});
+
 router.post('/register', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'Please wait before registering again' }), register);
 router.post('/login', loginAttemptLimiter(), login);
 router.post('/forgot-password', formSubmissionLimiter({ windowMs: 60 * 1000, message: 'Please wait before requesting another reset link' }), forgotPassword);
