@@ -280,9 +280,9 @@ export const uploadAvatar = async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded. Please select an image file.' });
     }
 
-    // Check file size (2MB limit)
-    if (req.file.size > 2 * 1024 * 1024) {
-      return res.status(400).json({ message: 'File size too large. Maximum size is 2MB.' });
+    // Check file size (5MB limit)
+    if (req.file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ message: 'File size too large. Maximum size is 5MB.' });
     }
 
     const user = await User.findById(req.user.id);

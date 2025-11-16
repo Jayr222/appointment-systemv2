@@ -72,7 +72,7 @@ router.post('/avatar',
       if (err) {
         console.error('❌ Multer upload error:', err);
         if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({ message: 'File size too large. Maximum size is 2MB.' });
+          return res.status(400).json({ message: 'File size too large. Maximum size is 5MB.' });
         }
         if (err.message && err.message.includes('Only image files')) {
           return res.status(400).json({ message: err.message });

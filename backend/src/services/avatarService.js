@@ -53,7 +53,7 @@ const fileFilter = (req, file, cb) => {
 export const uploadAvatar = multer({
   storage: storage,
   limits: {
-    fileSize: 2 * 1024 * 1024 // 2MB limit for avatars
+    fileSize: 5 * 1024 * 1024 // 5MB limit for avatars
   },
   fileFilter: fileFilter
 });
