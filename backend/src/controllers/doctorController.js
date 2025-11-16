@@ -7,6 +7,7 @@ import { sendAppointmentConfirmation, sendAppointmentCancellation } from '../ser
 import { assignQueueNumber } from '../services/queueService.js';
 import { emitQueueUpdate, emitNewMessage, emitNotification } from '../utils/socketEmitter.js';
 import Message from '../models/Message.js';
+import { generateMedicalRecordDocx } from '../services/medicalRecordDocService.js';
 
 // @desc    Get doctor dashboard stats
 // @route   GET /api/doctor/dashboard
@@ -222,6 +223,38 @@ export const getPatientRecords = async (req, res) => {
   } catch (error) {
     console.error('Get patient records error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Download medical record as DOCX (doctor)
+// @route   GET /api/doctor/medical-records/:id/download
+// @access  Private
+export const downloadMedicalRecordDocx = async (req, res) => {
+  try {
+    const record = await MedicalRecord.findById(req.params.id)
+      .populate('doctor', 'name specialization')
+      .populate('patient', 'name');
+
+    if (!record) {
+      return res.status(404).json({ message: 'Medical record not found' });
+    }
+
+    if (record.doctor?._id?.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to download this record' });
+    }
+
+    const { buffer, filename } = await generateMedicalRecordDocx(record);
+
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length
+    });
+
+    return res.send(buffer);
+  } catch (error) {
+    console.error('Doctor download medical record docx error:', error);
+    return res.status(500).json({ message: 'Failed to generate visit summary document' });
   }
 };
 

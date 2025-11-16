@@ -33,6 +33,13 @@ export const doctorService = {
     return response.data;
   },
 
+  downloadMedicalRecordDocx: async (recordId) => {
+    const response = await api.get(`/doctor/medical-records/${recordId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
   getAssignedPatients: async () => {
     const response = await api.get('/doctor/patient-documents/patients');
     return response.data;

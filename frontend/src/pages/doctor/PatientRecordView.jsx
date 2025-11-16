@@ -9,7 +9,8 @@ import {
   FaSearch,
   FaClipboardList,
   FaStethoscope,
-  FaFileMedical
+  FaFileMedical,
+  FaDownload
 } from 'react-icons/fa';
 import doctorService from '../../services/doctorService';
 
@@ -21,6 +22,8 @@ const PatientRecordView = () => {
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [error, setError] = useState('');
   const [recordError, setRecordError] = useState('');
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadErrors, setDownloadErrors] = useState({});
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -80,6 +83,47 @@ const PatientRecordView = () => {
 
     fetchRecords();
   }, [selectedPatientId]);
+
+  const handleDownloadRecord = async (record) => {
+    if (!record?._id) return;
+
+    setDownloadingId(record._id);
+    setDownloadErrors((prev) => {
+      const next = { ...prev };
+      delete next[record._id];
+      return next;
+    });
+
+    try {
+      const blobData = await doctorService.downloadMedicalRecordDocx(record._id);
+      const blob = new Blob([blobData], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const visitDate = record.createdAt
+        ? new Date(record.createdAt).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      const patientName = selectedPatient?.name || 'patient';
+      const safePatientName =
+        patientName.replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '') || 'patient';
+
+      link.href = url;
+      link.download = `visit-summary-${safePatientName}-${visitDate}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading medical record:', err);
+      setDownloadErrors((prev) => ({
+        ...prev,
+        [record._id]: 'Failed to download visit summary. Please try again.'
+      }));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const selectedPatient = useMemo(
     () => patients.find((patient) => patient._id === selectedPatientId) || null,
@@ -220,13 +264,31 @@ const PatientRecordView = () => {
                         <FaStethoscope /> {record.diagnosis || 'Diagnosis not specified'}
                       </h3>
                     </div>
-                    {record.appointment && (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-3 py-1 rounded-full">
-                        <FaCalendarAlt />
-                        Linked Appointment
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadRecord(record)}
+                        disabled={downloadingId === record._id}
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition ${
+                          downloadingId === record._id
+                            ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                            : 'bg-primary-600 text-white hover:bg-primary-700'
+                        }`}
+                      >
+                        <FaDownload />
+                        {downloadingId === record._id ? 'Preparing...' : 'Download DOCX'}
+                      </button>
+                      {record.appointment && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 text-primary-700 px-3 py-1 rounded-full">
+                          <FaCalendarAlt />
+                          Linked Appointment
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {downloadErrors[record._id] && (
+                    <p className="text-sm text-red-500 mb-3">{downloadErrors[record._id]}</p>
+                  )}
 
                   {record.chiefComplaint && (
                     <div className="mb-4">

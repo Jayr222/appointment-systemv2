@@ -12,7 +12,7 @@ const activityLogSchema = new mongoose.Schema({
   },
   module: {
     type: String,
-    enum: ['auth', 'appointment', 'medical_record', 'user_management', 'system'],
+    enum: ['auth', 'appointment', 'medical_record', 'user_management', 'system', 'message', 'queue', 'notification'],
     required: true
   },
   description: {

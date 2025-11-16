@@ -4,6 +4,7 @@ import {
   getAppointments,
   updateAppointmentStatus,
   getPatientRecords,
+  downloadMedicalRecordDocx,
   createMedicalRecord,
   getSchedule,
   getPatientMedicalHistory
@@ -28,6 +29,7 @@ router.use('/patient-documents', patientDocumentRoutes);
 
 // Routes requiring verified doctors only
 router.get('/patients/:id/records', doctorOnly, verifiedDoctorOnly, getPatientRecords);
+router.get('/medical-records/:id/download', doctorOnly, verifiedDoctorOnly, downloadMedicalRecordDocx);
 router.post('/medical-records', doctorOnly, verifiedDoctorOnly, createMedicalRecord);
 
 export default router;

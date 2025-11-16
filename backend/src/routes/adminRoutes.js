@@ -12,7 +12,8 @@ import {
   getAllAppointments,
   getSystemLogs,
   getPendingArrivals,
-  confirmPatientArrival
+  confirmPatientArrival,
+  createWalkInAppointment
 } from '../controllers/adminController.js';
 import {
   getPendingVerifications,
@@ -35,6 +36,7 @@ router.get('/appointment-requests', adminOnly, getAppointmentRequests);
 router.get('/appointments', adminOnly, getAllAppointments);
 router.get('/appointments/pending-arrival', adminOnly, getPendingArrivals);
 router.put('/appointments/:id/confirm-arrival', adminOnly, confirmPatientArrival);
+router.post('/walk-in-appointments', adminOnly, createWalkInAppointment);
 router.get('/logs', adminOnly, getSystemLogs);
 
 // Doctor verification routes

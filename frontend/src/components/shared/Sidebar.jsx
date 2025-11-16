@@ -8,7 +8,6 @@ import {
 import { useRole } from '../../context/RoleContext';
 import { USER_ROLES } from '../../utils/constants';
 import { useSidebar } from '../../context/SidebarContext';
-import ThemeToggle from './ThemeToggle';
 import Tooltip from './Tooltip';
 import logo from '../../assets/logo.jfif';
 
@@ -155,10 +154,6 @@ const Sidebar = () => {
         })}
       </nav>
 
-      {/* Footer with Theme Toggle */}
-      <div className={`flex-shrink-0 p-6 border-t border-white border-opacity-20 transition-all duration-300 ${isCollapsed ? 'px-4' : ''}`}>
-        <ThemeToggle className={isCollapsed ? 'w-full' : 'w-full'} />
-      </div>
     </div>
   );
 };

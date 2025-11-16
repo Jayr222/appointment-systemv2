@@ -176,6 +176,19 @@ const userSchema = new mongoose.Schema({
   },
   lockUntil: {
     type: Date
+  },
+  mustChangePassword: {
+    type: Boolean,
+    default: false
+  },
+  temporaryPasswordIssuedAt: {
+    type: Date
+  },
+  temporaryPasswordExpiresAt: {
+    type: Date
+  },
+  lastPasswordChange: {
+    type: Date
   }
 }, {
   timestamps: true

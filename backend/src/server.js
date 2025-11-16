@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import connectDB from './config/db.js';
 import { config } from './config/env.js';
 import { setIO } from './utils/socketEmitter.js';
+import { ensureDefaultAdmin } from './utils/ensureDefaultAdmin.js';
 
 // Route imports
 import authRoutes from './routes/authRoutes.js';
@@ -18,8 +19,9 @@ import siteContentRoutes from './routes/siteContentRoutes.js';
 import doctorAvailabilityRoutes from './routes/doctorAvailabilityRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 
-// Connect to database
-connectDB();
+// Connect to database and ensure default admin exists
+await connectDB();
+await ensureDefaultAdmin();
 
 // Initialize app
 const app = express();
@@ -144,10 +146,15 @@ io.on('connection', (socket) => {
 // Export io for use in controllers
 export { io };
 
-// Start server
+// Start server (avoid starting a listener on serverless platforms like Vercel)
 const PORT = config.PORT;
-httpServer.listen(PORT, () => {
-  console.log(`Server running in ${config.NODE_ENV} mode on port ${PORT}`);
-  console.log(`Socket.IO server initialized`);
-});
+if (!process.env.VERCEL) {
+  httpServer.listen(PORT, () => {
+    console.log(`Server running in ${config.NODE_ENV} mode on port ${PORT}`);
+    console.log(`Socket.IO server initialized`);
+  });
+}
+
+// Export Express app for serverless platforms (e.g., Vercel)
+export default app;
 

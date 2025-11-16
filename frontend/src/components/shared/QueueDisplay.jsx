@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
-import { FaUser, FaClock, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaBell } from 'react-icons/fa';
+import { FaUser, FaClock, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaBell, FaSearch } from 'react-icons/fa';
 import queueService from '../../services/queueService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from '../../context/NotificationContext';
@@ -13,6 +13,7 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
   const [socket, setSocket] = useState(null);
   const [currentCalled, setCurrentCalled] = useState(null);
   const [calledPatientId, setCalledPatientId] = useState(null); // Track which patient is being called
+  const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
   const { addNotification, startContinuousRinging, stopContinuousRinging } = useNotifications();
   const navigate = useNavigate();
@@ -284,6 +285,24 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
     }
   };
 
+  const filteredQueue = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return queue;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return queue.filter((appointment) => {
+      const patientName = appointment.patient?.name || '';
+      const doctorName = appointment.doctor?.name || '';
+      const queueNumber = String(appointment.queueNumber || '');
+      return (
+        patientName.toLowerCase().includes(query) ||
+        doctorName.toLowerCase().includes(query) ||
+        queueNumber.includes(query)
+      );
+    });
+  }, [queue, searchQuery]);
+
   if (!user) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -330,22 +349,34 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
 
       {/* Controls for Doctor/Admin */}
       {showControls && (user?.role === 'doctor' || user?.role === 'admin') && (
-        <div className="mb-6 flex gap-2">
-          <button
-            onClick={handleCallNext}
-            className="px-4 py-2 text-white rounded-md font-semibold transition-colors"
-            style={{ backgroundColor: '#31694E' }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#27543e'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = '#31694E'}
-          >
-            Call Next Patient
-          </button>
-          <button
-            onClick={fetchQueue}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold hover:bg-gray-300 transition-colors"
-          >
-            Refresh Queue
-          </button>
+        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex gap-2">
+            <button
+              onClick={handleCallNext}
+              className="px-4 py-2 text-white rounded-md font-semibold transition-colors"
+              style={{ backgroundColor: '#31694E' }}
+              onMouseEnter={(e) => { e.target.style.backgroundColor = '#27543e'; }}
+              onMouseLeave={(e) => { e.target.style.backgroundColor = '#31694E'; }}
+            >
+              Call Next Patient
+            </button>
+            <button
+              onClick={fetchQueue}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold hover:bg-gray-300 transition-colors"
+            >
+              Refresh Queue
+            </button>
+          </div>
+          <div className="relative w-full md:max-w-sm">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search queue by name, doctor, or #"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
+            />
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
         </div>
       )}
 
@@ -367,10 +398,14 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
 
       {/* Queue List */}
       <div className="space-y-2 max-h-96 overflow-y-auto">
-        {queue.length === 0 ? (
-          <p className="text-center text-gray-600 py-8">No patients in queue today</p>
+        {filteredQueue.length === 0 ? (
+          <p className="text-center text-gray-600 py-8">
+            {queue.length === 0
+              ? 'No patients in queue today'
+              : `No queue entries match "${searchQuery}"`}
+          </p>
         ) : (
-          queue.map((appointment) => (
+          filteredQueue.map((appointment) => (
             <div
               key={appointment._id}
               className={`p-4 rounded-lg border-2 transition-all ${

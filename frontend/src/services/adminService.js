@@ -95,6 +95,11 @@ export const adminService = {
     return response.data;
   },
 
+  createWalkInAppointment: async (data) => {
+    const response = await api.post('/admin/walk-in-appointments', data);
+    return response.data;
+  },
+
   getPatientDocuments: async (patientId, documentType) => {
     const params = {};
     if (patientId) params.patientId = patientId;

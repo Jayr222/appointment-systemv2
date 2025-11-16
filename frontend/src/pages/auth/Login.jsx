@@ -4,7 +4,7 @@ import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import GoogleSignIn from '../../components/auth/GoogleSignIn';
 import AppBar from '../../components/shared/AppBar';
-import healthBg from '../../assets/health-bg.png';
+import bgWebsite from '../../assets/bgWebsite.jpg';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -125,7 +125,7 @@ const Login = () => {
       <div 
         className="absolute inset-0"
         style={{
-          backgroundImage: `url(${healthBg})`,
+          backgroundImage: `url(${bgWebsite})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat'
@@ -133,7 +133,7 @@ const Login = () => {
       ></div>
       
       {/* Overlay for better readability */}
-      <div className="absolute inset-0 bg-black bg-opacity-30"></div>
+      <div className="absolute inset-0 bg-black bg-opacity-10"></div>
       
       {/* AppBar */}
       <AppBar />

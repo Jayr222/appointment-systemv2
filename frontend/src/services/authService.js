@@ -26,17 +26,19 @@ api.interceptors.response.use(
   (error) => {
     // Only handle 401 errors, ignore network errors
     if (error.response?.status === 401) {
-      // Don't logout on /auth/me validation - let AuthContext handle it
-      if (error.config?.url?.includes('/auth/me')) {
-        return Promise.reject(error);
-      }
-      
-      // Token expired or invalid - logout user for other endpoints
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // Redirect to login if not already there
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-        window.location.href = '/login';
+      const requestUrl = error.config?.url || '';
+      const method = error.config?.method?.toLowerCase();
+
+      const skipAutoLogout =
+        requestUrl.includes('/auth/me') ||
+        (method === 'get' && requestUrl.startsWith('/patient/'));
+
+      if (!skipAutoLogout) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);

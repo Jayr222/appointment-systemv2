@@ -1,9 +1,13 @@
+import crypto from 'crypto';
 import User from '../models/User.js';
 import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import PatientDocument from '../models/PatientDocument.js';
 import ActivityLog from '../models/ActivityLog.js';
 import { logActivity } from '../services/loggingService.js';
+import { assignQueueNumber, getTodayQueue } from '../services/queueService.js';
+import { emitQueueUpdate } from '../utils/socketEmitter.js';
+import { sendWalkInAppointmentEmail } from '../services/emailService.js';
 
 // @desc    Get admin dashboard stats
 // @route   GET /api/admin/dashboard
@@ -885,6 +889,275 @@ export const getPendingArrivals = async (req, res) => {
   } catch (error) {
     console.error('Get pending arrivals error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Create walk-in appointment and assign queue
+// @route   POST /api/admin/walk-in-appointments
+// @access  Private/Admin
+export const createWalkInAppointment = async (req, res) => {
+  try {
+    const {
+      patientId,
+      name,
+      email,
+      phone,
+      gender,
+      dateOfBirth,
+      address,
+      doctorId,
+      reason,
+      priorityLevel = 'regular',
+      notes
+    } = req.body || {};
+
+    if (!doctorId) {
+      return res.status(400).json({ message: 'Doctor is required for walk-in appointments' });
+    }
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ message: 'Reason for visit is required' });
+    }
+
+    const allowedPriority = ['regular', 'priority', 'emergency'];
+    const chosenPriority = allowedPriority.includes(priorityLevel) ? priorityLevel : 'regular';
+
+    const doctor = await User.findOne({
+      _id: doctorId,
+      role: 'doctor',
+      isDeleted: { $ne: true }
+    }).select('name specialization');
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Selected doctor not found' });
+    }
+
+    let patient;
+    let temporaryPassword = null;
+
+    if (patientId) {
+      patient = await User.findOne({
+        _id: patientId,
+        role: 'patient',
+        isDeleted: { $ne: true }
+      });
+
+      if (!patient) {
+        return res.status(404).json({ message: 'Selected patient not found' });
+      }
+    } else {
+      if (!name || !name.trim()) {
+        return res.status(400).json({ message: 'Patient name is required for new accounts' });
+      }
+
+      if (!email || !email.trim()) {
+        return res.status(400).json({ message: 'Email is required to create a patient account' });
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      patient = await User.findOne({
+        email: normalizedEmail,
+        isDeleted: { $ne: true }
+      });
+
+      if (patient) {
+        if (patient.role !== 'patient') {
+          return res.status(400).json({ message: 'Existing user with this email is not a patient' });
+        }
+
+        let needsSave = false;
+        if (!patient.name && name?.trim()) {
+          patient.name = name.trim();
+          needsSave = true;
+        }
+        if (!patient.phone && phone?.trim()) {
+          patient.phone = phone.trim();
+          needsSave = true;
+        }
+        if (!patient.address && address?.trim()) {
+          patient.address = address.trim();
+          needsSave = true;
+        }
+        if (!patient.gender && gender) {
+          patient.gender = gender;
+          needsSave = true;
+        }
+        if (!patient.dateOfBirth && dateOfBirth) {
+          const parsedDob = new Date(dateOfBirth);
+          if (!Number.isNaN(parsedDob.getTime())) {
+            patient.dateOfBirth = parsedDob;
+            needsSave = true;
+          }
+        }
+        if (needsSave) {
+          await patient.save();
+        }
+      } else {
+        const password = crypto.randomBytes(6).toString('base64url').slice(0, 10);
+        const nowDate = new Date();
+        const expiresAt = new Date(nowDate.getTime() + 5 * 60 * 1000);
+
+        const newPatient = new User({
+          name: name.trim(),
+          email: normalizedEmail,
+          phone: phone?.trim() || undefined,
+          gender: gender || undefined,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+          address: address?.trim() || undefined,
+          role: 'patient',
+          password,
+          authProvider: 'local',
+          isActive: true,
+          mustChangePassword: true,
+          temporaryPasswordIssuedAt: nowDate,
+          temporaryPasswordExpiresAt: expiresAt
+        });
+
+        await newPatient.save();
+        patient = newPatient;
+        temporaryPassword = password;
+
+        await logActivity(
+          req.user.id,
+          'create_patient_walk_in',
+          'user',
+          `Created walk-in patient account for ${patient.name} (${patient.email})`
+        );
+      }
+    }
+
+    const now = new Date();
+    let appointment = null;
+    let attempt = 0;
+
+    while (!appointment && attempt < 5) {
+      const timeCandidate = new Date(now.getTime() + attempt * 1000);
+      const timeString = timeCandidate.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+
+      try {
+        appointment = await Appointment.create({
+          patient: patient._id,
+          doctor: doctor._id,
+          appointmentDate: now,
+          appointmentTime: timeString,
+          reason: reason.trim(),
+          status: 'confirmed',
+          notes: notes?.trim() || undefined,
+          visitType: 'walk-in',
+          priorityLevel: chosenPriority,
+          patientArrived: true,
+          arrivedAt: now,
+          confirmedBy: req.user.id
+        });
+      } catch (error) {
+        if (error?.code === 11000) {
+          attempt += 1;
+          if (attempt >= 5) {
+            throw new Error('Unable to schedule walk-in appointment due to conflicting time slots. Please try again.');
+          }
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!appointment) {
+      return res.status(500).json({ message: 'Failed to create walk-in appointment' });
+    }
+
+    let queuedAppointment = await assignQueueNumber(appointment._id);
+    await queuedAppointment.populate('patient', 'name email phone temporaryPasswordExpiresAt mustChangePassword');
+    await queuedAppointment.populate('doctor', 'name specialization');
+
+    await logActivity(
+      req.user.id,
+      'create_walk_in',
+      'appointment',
+      `Created walk-in appointment for patient ${queuedAppointment.patient?.name || queuedAppointment.patient}`
+    );
+
+    try {
+      const queue = await getTodayQueue(queuedAppointment.doctor?._id || queuedAppointment.doctor);
+      emitQueueUpdate('queue-updated', { queue });
+
+      if (queuedAppointment.queueNumber) {
+        emitQueueUpdate('queue-number-assigned', {
+          appointmentId: queuedAppointment._id,
+          patientId: queuedAppointment.patient?._id || queuedAppointment.patient,
+          queueNumber: queuedAppointment.queueNumber,
+          appointment: queuedAppointment
+        });
+      }
+    } catch (emitError) {
+      console.error('Error emitting queue updates for walk-in appointment:', emitError);
+    }
+
+    const patientObj = patient.toObject();
+    delete patientObj.password;
+
+    let emailSent = false;
+    if (patient.email) {
+      const appointmentDateObj = queuedAppointment.appointmentDate
+        ? new Date(queuedAppointment.appointmentDate)
+        : new Date();
+      const appointmentDateFormatted = appointmentDateObj.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+
+      const appointmentTimeFormatted =
+        queuedAppointment.appointmentTime ||
+        appointmentDateObj.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+
+      const loginUrl = process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL.replace(/\/$/, '')}/login`
+        : undefined;
+
+      try {
+        const tempPasswordExpiresAt = patient.temporaryPasswordExpiresAt
+          ? new Date(patient.temporaryPasswordExpiresAt)
+          : null;
+
+        emailSent = await sendWalkInAppointmentEmail(patient.email, {
+          patientName: patient.name,
+          doctorName: queuedAppointment.doctor?.name,
+          doctorSpecialization: queuedAppointment.doctor?.specialization,
+          appointmentDate: appointmentDateFormatted,
+          appointmentTime: appointmentTimeFormatted,
+          queueNumber: queuedAppointment.queueNumber,
+          priorityLevel: queuedAppointment.priorityLevel,
+          reason: queuedAppointment.reason,
+          temporaryPassword,
+          temporaryPasswordExpiresAt: tempPasswordExpiresAt,
+          loginUrl
+        });
+      } catch (emailError) {
+        console.error('Failed to send walk-in email:', emailError);
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      patient: patientObj,
+      appointment: queuedAppointment,
+      temporaryPassword,
+      isExistingPatient: !temporaryPassword,
+      emailSent,
+      temporaryPasswordExpiresAt: patient.temporaryPasswordExpiresAt
+    });
+  } catch (error) {
+    console.error('Create walk-in appointment error:', error);
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 

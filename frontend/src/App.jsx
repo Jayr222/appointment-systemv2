@@ -4,7 +4,6 @@ import { AuthProvider } from './context/AuthContext';
 import { RoleProvider } from './context/RoleContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { SiteContentProvider } from './context/SiteContentContext';
-import { ThemeProvider } from './context/ThemeContext';
 import { SidebarProvider } from './context/SidebarContext';
 import ProtectedRoute from './components/shared/ProtectedRoute';
 import { USER_ROLES } from './utils/constants';
@@ -27,6 +26,7 @@ import BookAppointment from './pages/patient/BookAppointment';
 import Records from './pages/patient/Records';
 import PatientProfile from './pages/patient/Profile';
 import PatientMessages from './pages/patient/Messages';
+import PatientAppointments from './pages/patient/Appointments';
 
 // Doctor Pages
 import DoctorDashboard from './pages/doctor/Dashboard';
@@ -64,12 +64,11 @@ import Contact from './pages/Contact.jsx';
 function App() {
   return (
     <Router>
-      <ThemeProvider>
-        <SidebarProvider>
-          <SiteContentProvider>
-            <AuthProvider>
-              <RoleProvider>
-                <NotificationProvider>
+      <SidebarProvider>
+        <SiteContentProvider>
+          <AuthProvider>
+            <RoleProvider>
+              <NotificationProvider>
               <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
@@ -99,6 +98,16 @@ function App() {
                 <ProtectedRoute allowedRoles={[USER_ROLES.PATIENT]}>
                   <PatientLayout>
                     <BookAppointment />
+                  </PatientLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patient/appointments"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.PATIENT]}>
+                  <PatientLayout>
+                    <PatientAppointments />
                   </PatientLayout>
                 </ProtectedRoute>
               }
@@ -343,13 +352,12 @@ function App() {
             {/* Default Route */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
-              </Routes>
-                </NotificationProvider>
-              </RoleProvider>
-            </AuthProvider>
-          </SiteContentProvider>
-        </SidebarProvider>
-      </ThemeProvider>
+          </Routes>
+        </NotificationProvider>
+      </RoleProvider>
+    </AuthProvider>
+  </SiteContentProvider>
+      </SidebarProvider>
     </Router>
   );
 }

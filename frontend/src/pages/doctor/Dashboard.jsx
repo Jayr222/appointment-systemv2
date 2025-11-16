@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { FaCalendarAlt, FaClock, FaHourglassHalf, FaEye, FaTimes, FaExclamationTriangle, FaUser, FaPhone, FaEnvelope, FaMapMarkerAlt, FaBirthdayCake, FaVenusMars, FaIdCard, FaSearch } from 'react-icons/fa';
+import { FaCalendarAlt, FaClock, FaHourglassHalf, FaEye, FaTimes, FaExclamationTriangle, FaUser, FaPhone, FaEnvelope, FaMapMarkerAlt, FaBirthdayCake, FaVenusMars, FaIdCard } from 'react-icons/fa';
 import doctorService from '../../services/doctorService';
 import { APPOINTMENT_STATUS_COLORS } from '../../utils/constants';
 import QueueDisplay from '../../components/shared/QueueDisplay';
@@ -16,9 +16,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showPatientModal, setShowPatientModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
   const [cancelModal, setCancelModal] = useState({ show: false, appointment: null, reason: '' });
   const [cancelling, setCancelling] = useState(false);
   const { user } = useAuth();
@@ -44,34 +41,6 @@ const Dashboard = () => {
 
     fetchData();
   }, []);
-
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      // Extract unique patients from appointments
-      const uniquePatients = new Map();
-      allAppointments.forEach(apt => {
-        if (apt.patient && !uniquePatients.has(apt.patient._id || apt.patient)) {
-          uniquePatients.set(apt.patient._id || apt.patient, apt.patient);
-        }
-      });
-
-      const patientsArray = Array.from(uniquePatients.values());
-      const filtered = patientsArray.filter(patient => {
-        const name = patient.name || '';
-        const email = patient.email || '';
-        const phone = patient.phone || '';
-        const query = searchQuery.toLowerCase();
-        return name.toLowerCase().includes(query) ||
-               email.toLowerCase().includes(query) ||
-               phone.includes(query);
-      });
-      setSearchResults(filtered);
-      setShowSearchResults(true);
-    } else {
-      setSearchResults([]);
-      setShowSearchResults(false);
-    }
-  }, [searchQuery, allAppointments]);
 
   const handleViewPatient = (appointment) => {
     setSelectedPatient(appointment.patient);
@@ -143,52 +112,6 @@ const Dashboard = () => {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Doctor Dashboard</h1>
-        
-        {/* Search Bar */}
-        <div className="relative w-full max-w-md">
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search for patients..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
-            />
-          </div>
-          
-          {/* Search Results Dropdown */}
-          {showSearchResults && searchResults.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-y-auto">
-              {searchResults.map((patient) => (
-                <button
-                  key={patient._id || patient}
-                  onClick={() => {
-                    setSelectedPatient(patient);
-                    setShowPatientModal(true);
-                    setSearchQuery('');
-                  }}
-                  className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 border-b last:border-b-0 transition-colors text-left"
-                >
-                  <div className="flex-shrink-0">
-                    <FaUser className="text-2xl text-[#31694E]" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800">{patient.name || patient.email}</p>
-                    {patient.email && <p className="text-sm text-gray-600">{patient.email}</p>}
-                    {patient.phone && <p className="text-xs text-gray-500">{patient.phone}</p>}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-          
-          {showSearchResults && searchQuery.trim() && searchResults.length === 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4">
-              <p className="text-gray-600">No patients found matching "{searchQuery}"</p>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Stats Cards */}

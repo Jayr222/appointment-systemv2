@@ -3,7 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useSidebar } from '../../context/SidebarContext';
 import Avatar from './Avatar';
-import ThemeToggle from './ThemeToggle';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -27,7 +26,6 @@ const Navbar = () => {
           </h2>
         </div>
         <div className="flex items-center space-x-4">
-          <ThemeToggle />
           <div className="flex items-center space-x-3">
             <div className="text-right">
               <p className="text-sm font-medium text-white">{user?.name}</p>

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -5,10 +6,23 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const avatarsDir = path.join(__dirname, '../../uploads/avatars/');
+
+const ensureAvatarsDir = () => {
+  if (!fs.existsSync(avatarsDir)) {
+    fs.mkdirSync(avatarsDir, { recursive: true });
+  }
+  return avatarsDir;
+};
+
 // Configure storage for avatars
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../../uploads/avatars/'));
+    try {
+      cb(null, ensureAvatarsDir());
+    } catch (error) {
+      cb(error);
+    }
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.round(Math.random() * 1E9));
@@ -36,6 +50,9 @@ export const uploadAvatar = multer({
   },
   fileFilter: fileFilter
 });
+
+export const AVATARS_DIR = avatarsDir;
+export const ensureAvatarUploadDirExists = ensureAvatarsDir;
 
 // Get avatar URL
 export const getAvatarUrl = (avatar) => {

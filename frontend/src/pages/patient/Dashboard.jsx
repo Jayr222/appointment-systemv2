@@ -428,7 +428,7 @@ const Dashboard = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Link to="/patient/book-appointment" className="bg-white rounded-lg shadow-md p-6 border hover:shadow-lg transition-shadow cursor-pointer">
+        <Link to="/patient/appointments" className="bg-white rounded-lg shadow-md p-6 border hover:shadow-lg transition-shadow cursor-pointer">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm">Total Appointments</p>

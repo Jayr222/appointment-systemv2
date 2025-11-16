@@ -1,11 +1,14 @@
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
+import path from 'path';
+import fs from 'fs/promises';
 import User from '../models/User.js';
 import { generateToken } from '../utils/generateToken.js';
 import { logActivity, logError } from '../services/loggingService.js';
 import { noteFailedLogin, resetLoginAttempts } from '../middleware/rateLimiter.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
+import { AVATARS_DIR, ensureAvatarUploadDirExists } from '../services/avatarService.js';
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -57,7 +60,8 @@ export const register = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        avatar: user.avatar
       }
     });
   } catch (error) {
@@ -148,6 +152,21 @@ export const login = async (req, res) => {
     await user.resetLoginAttempts();
     resetLoginAttempts(req);
 
+    if (
+      user.mustChangePassword &&
+      user.temporaryPasswordExpiresAt &&
+      new Date(user.temporaryPasswordExpiresAt).getTime() < Date.now()
+    ) {
+      user.mustChangePassword = false;
+      user.temporaryPasswordIssuedAt = undefined;
+      user.temporaryPasswordExpiresAt = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      return res.status(401).json({
+        message: 'Temporary password has expired. Please contact the clinic to obtain a new one.'
+      });
+    }
+
     // Log activity (don't block login if logging fails)
     logActivity(user._id, 'login', 'auth', 'User logged in', {
       ipAddress: req.ip,
@@ -164,7 +183,10 @@ export const login = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        avatar: user.avatar,
+        mustChangePassword: user.mustChangePassword || false,
+        temporaryPasswordExpiresAt: user.temporaryPasswordExpiresAt
       }
     });
   } catch (error) {
@@ -191,6 +213,7 @@ export const getMe = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        avatar: user.avatar,
         phone: user.phone,
         dateOfBirth: user.dateOfBirth,
         gender: user.gender,
@@ -257,15 +280,10 @@ export const uploadAvatar = async (req, res) => {
 
     // Delete old avatar if exists and it's not a URL
     if (user.avatar && !user.avatar.startsWith('http')) {
-      const fs = await import('fs/promises');
-      const path = await import('path');
-      const { fileURLToPath } = await import('url');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.dirname(__filename);
-      
-      const oldAvatarPath = path.join(__dirname, '../../uploads/avatars/', user.avatar);
+      ensureAvatarUploadDirExists();
+      const oldAvatarPath = path.join(AVATARS_DIR, user.avatar);
       try {
-        await fs.unlink(oldAvatarPath);
+        await fs.rm(oldAvatarPath, { force: true });
       } catch (error) {
         console.error('Error deleting old avatar:', error);
       }
@@ -319,6 +337,9 @@ export const changePassword = async (req, res) => {
 
     user.password = newPassword;
     user.lastPasswordChange = new Date();
+    user.mustChangePassword = false;
+    user.temporaryPasswordIssuedAt = undefined;
+    user.temporaryPasswordExpiresAt = undefined;
     await user.save();
 
     // Log activity
@@ -495,7 +516,8 @@ export const changeEmail = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        avatar: user.avatar
       }
     });
   } catch (error) {
@@ -537,7 +559,8 @@ export const changePhone = async (req, res) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
-        role: user.role
+        role: user.role,
+        avatar: user.avatar
       }
     });
   } catch (error) {
