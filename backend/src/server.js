@@ -68,6 +68,16 @@ app.use('/api/site-content', siteContentRoutes);
 app.use('/api/doctor/availability', doctorAvailabilityRoutes);
 app.use('/api/messages', messageRoutes);
 
+// Friendly root route
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Healthcare System API - see /health or /api/* endpoints',
+    health: '/health',
+    apiBase: '/api'
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
