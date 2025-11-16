@@ -144,12 +144,13 @@ console.log('✅ /api/auth routes registered');
 console.log('   Available routes: POST /api/auth/avatar, GET /api/auth/test, etc.');
 app.use('/api/auth/google', googleAuthRoutes);
 app.use('/api/patient', patientRoutes);
+// Mount more specific routes BEFORE general routes to ensure proper matching
+app.use('/api/doctor/availability', doctorAvailabilityRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/nurse', nurseRoutes);
 app.use('/api/queue', queueRoutes);
 app.use('/api/site-content', siteContentRoutes);
-app.use('/api/doctor/availability', doctorAvailabilityRoutes);
 app.use('/api/messages', messageRoutes);
 
 // Friendly root route
