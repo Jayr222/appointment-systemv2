@@ -129,11 +129,17 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 404 handler
+// 404 handler - log what route was requested
 app.use((req, res) => {
+  console.log('❌ 404 - Route not found:', req.method, req.originalUrl || req.url);
+  console.log('   Path:', req.path);
+  console.log('   All routes should start with /api');
   res.status(404).json({ 
     success: false, 
-    message: 'Route not found' 
+    message: 'Route not found',
+    method: req.method,
+    path: req.path,
+    url: req.url
   });
 });
 

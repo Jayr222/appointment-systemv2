@@ -20,17 +20,23 @@ import { loginAttemptLimiter, formSubmissionLimiter } from '../middleware/rateLi
 
 const router = express.Router();
 
+// Simple test route to verify routing works (no auth required)
+router.get('/test', (req, res) => {
+  res.json({ message: 'Auth routes are working!', timestamp: new Date().toISOString() });
+});
+
 router.post('/register', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'Please wait before registering again' }), register);
 router.post('/login', loginAttemptLimiter(), login);
 router.post('/forgot-password', formSubmissionLimiter({ windowMs: 60 * 1000, message: 'Please wait before requesting another reset link' }), forgotPassword);
 router.put('/reset-password/:token', formSubmissionLimiter({ windowMs: 5 * 1000, message: 'Please wait before trying again' }), resetPassword);
-// Test route to verify routing works
+router.get('/me', protect, getMe);
+router.put('/profile', protect, updateProfile);
+
+// Test route to verify routing works (must be before /avatar to avoid conflict)
 router.get('/avatar/test', protect, (req, res) => {
   res.json({ message: 'Avatar route is accessible', user: req.user.id });
 });
 
-router.get('/me', protect, getMe);
-router.put('/profile', protect, updateProfile);
 // Avatar upload route with proper middleware chain
 router.post('/avatar', 
   protect, 
@@ -78,8 +84,12 @@ router.post('/2fa/verify', protect, verify2FA);
 router.post('/2fa/disable', protect, disable2FA);
 
 // Debug: Log registered routes on startup
-console.log('📋 Auth routes registered:');
-console.log('   POST /api/auth/avatar');
+if (process.env.NODE_ENV !== 'production') {
+  console.log('📋 Auth routes registered:');
+  console.log('   GET  /api/auth/test (no auth)');
+  console.log('   GET  /api/auth/avatar/test (auth required)');
+  console.log('   POST /api/auth/avatar (auth required)');
+}
 
 export default router;
 
