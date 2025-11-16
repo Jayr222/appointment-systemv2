@@ -1,4 +1,9 @@
-export const API_BASE_URL = '/api';
+// Use environment variable for API URL in production, or relative path for same-domain deployment
+// For separate deployments: Set VITE_API_URL to your backend Vercel URL (e.g., https://your-backend.vercel.app)
+// For same-domain deployment: Leave VITE_API_URL empty to use relative /api path
+export const API_BASE_URL = import.meta.env.VITE_API_URL 
+  ? import.meta.env.VITE_API_URL 
+  : '/api';
 
 export const API_URL = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : '';
 
