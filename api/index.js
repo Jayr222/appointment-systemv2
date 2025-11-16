@@ -1,103 +1,59 @@
 // Vercel serverless function handler for Express app
+// Import the Express app - it handles all route registration
 import app from '../backend/src/server.js';
 
 // Vercel serverless function handler
 // Vercel's rewrite rule: /api/(.*) -> /api/index.js
-// When Vercel rewrites, it may pass the path in different ways
+// When Vercel rewrites, req.url should contain the original full path
 export default async (req, res) => {
-  // Set VERCEL env var for Express middleware
-  if (!process.env.VERCEL) {
-    process.env.VERCEL = '1';
-  }
+  // Set VERCEL env var (should already be set, but ensure it)
+  process.env.VERCEL = '1';
   
-  // Check Vercel-specific headers for the original path
-  // Vercel may pass the original path in x-vercel-rewrite or x-invoke-path headers
-  const vercelPath = req.headers['x-invoke-path'] || req.headers['x-vercel-rewrite'] || req.headers['x-vercel-original-path'];
+  // Vercel should preserve the original URL in req.url when using rewrites
+  // But we need to ensure it's set correctly for Express
+  const originalUrl = req.url || '';
   
-  // Get the incoming URL - try multiple sources
-  let incomingUrl = vercelPath || req.url || req.originalUrl || '';
-  
-  // Log all available information for debugging
-  console.log('🔍 Serverless function received:', {
-    method: req.method,
-    url: req.url,
-    originalUrl: req.originalUrl,
-    vercelPath: vercelPath,
-    incomingUrl: incomingUrl,
-    headers: {
-      'x-invoke-path': req.headers['x-invoke-path'],
-      'x-vercel-rewrite': req.headers['x-vercel-rewrite'],
-      'x-vercel-original-path': req.headers['x-vercel-original-path']
-    }
-  });
-  
-  // If we still don't have a URL, this is a problem
-  if (!incomingUrl) {
-    console.error('❌ No URL found in request!');
-    return res.status(500).json({ 
-      error: 'Internal server error: No URL found',
-      debug: {
-        url: req.url,
-        originalUrl: req.originalUrl,
-        headers: Object.keys(req.headers)
-      }
-    });
-  }
-  
-  // Handle different cases of what Vercel might pass
-  let finalUrl = incomingUrl;
-  
-  // Case 1: URL already has /api prefix - use as is
-  if (finalUrl.startsWith('/api')) {
-    // Already correct, but ensure originalUrl is set
-    if (!req.originalUrl) {
-      req.originalUrl = finalUrl;
-    }
-    // Ensure req.url matches
-    if (req.url !== finalUrl) {
-      req.url = finalUrl;
-    }
-  }
-  // Case 2: URL starts with / but not /api (e.g., "/doctor/availability")
-  else if (finalUrl.startsWith('/')) {
-    // Add /api prefix
-    const queryString = finalUrl.includes('?') ? finalUrl.substring(finalUrl.indexOf('?')) : '';
-    const pathOnly = finalUrl.split('?')[0];
-    finalUrl = '/api' + pathOnly + queryString;
-    req.url = finalUrl;
-    req.originalUrl = finalUrl;
-    console.log('🔄 Added /api prefix:', incomingUrl, '->', finalUrl);
-  }
-  // Case 3: URL has no leading slash (e.g., "doctor/availability")
-  else if (finalUrl && !finalUrl.startsWith('/')) {
-    // Add leading slash and /api prefix
-    const queryString = finalUrl.includes('?') ? finalUrl.substring(finalUrl.indexOf('?')) : '';
-    const pathOnly = finalUrl.split('?')[0];
-    finalUrl = '/api/' + pathOnly + queryString;
-    req.url = finalUrl;
-    req.originalUrl = finalUrl;
-    console.log('🔄 Added / and /api prefix:', incomingUrl, '->', finalUrl);
-  }
-  // Case 4: Special routes that shouldn't have /api
-  else if (finalUrl.startsWith('/health') || finalUrl.startsWith('/uploads')) {
-    // Keep as is
-    if (!req.originalUrl) {
-      req.originalUrl = finalUrl;
-    }
-    if (req.url !== finalUrl) {
-      req.url = finalUrl;
-    }
-  }
-  
-  console.log('📤 Final URL passed to Express:', {
+  // Log for debugging
+  console.log('🔍 Vercel serverless function:', {
     method: req.method,
     url: req.url,
     originalUrl: req.originalUrl,
     path: req.path
   });
   
-  // Pass request to Express
-  return app(req, res);
+  // Ensure originalUrl is set (Vercel should preserve this)
+  if (!req.originalUrl && req.url) {
+    req.originalUrl = req.url;
+  }
+  
+  // If the URL doesn't start with /api and it's not a special route,
+  // it might be the captured path segment, so add /api prefix
+  if (originalUrl && 
+      !originalUrl.startsWith('/api') && 
+      !originalUrl.startsWith('/health') && 
+      !originalUrl.startsWith('/uploads') &&
+      !originalUrl.startsWith('/socket.io')) {
+    const queryString = originalUrl.includes('?') ? originalUrl.substring(originalUrl.indexOf('?')) : '';
+    const pathOnly = originalUrl.split('?')[0];
+    const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
+    req.url = '/api' + normalizedPath + queryString;
+    req.originalUrl = req.url;
+    console.log('🔄 Normalized path:', originalUrl, '->', req.url);
+  }
+  
+  // Pass the request to Express app
+  // Express will handle routing based on req.url
+  try {
+    app(req, res);
+  } catch (error) {
+    console.error('❌ Error in serverless function:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Internal server error',
+        message: error.message 
+      });
+    }
+  }
 };
 
 

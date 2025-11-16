@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/scripts/seedData.js",
-    "reset": "node src/scripts/resetDatabase.js"
+    "reset": "node src/scripts/resetDatabase.js",
+    "check-admin": "node src/scripts/checkAdmin.js"
   },
   "keywords": [
     "healthcare",
