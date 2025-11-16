@@ -4,42 +4,57 @@ import app from '../backend/src/server.js';
 
 // Vercel serverless function handler
 // Vercel's rewrite rule: /api/(.*) -> /api/index.js
-// When Vercel rewrites, req.url should contain the original full path
+// When Vercel rewrites, the captured group (.*) might be passed in req.url
+// We need to reconstruct the full /api path
 export default async (req, res) => {
   // Set VERCEL env var (should already be set, but ensure it)
   process.env.VERCEL = '1';
   
-  // Vercel should preserve the original URL in req.url when using rewrites
-  // But we need to ensure it's set correctly for Express
-  const originalUrl = req.url || '';
+  // Get the incoming URL - Vercel might pass it in different ways
+  let incomingUrl = req.url || req.originalUrl || '';
   
   // Log for debugging
-  console.log('🔍 Vercel serverless function:', {
+  console.log('🔍 Vercel serverless function received:', {
     method: req.method,
     url: req.url,
     originalUrl: req.originalUrl,
+    incomingUrl: incomingUrl,
     path: req.path
   });
   
-  // Ensure originalUrl is set (Vercel should preserve this)
-  if (!req.originalUrl && req.url) {
-    req.originalUrl = req.url;
+  // Normalize the path to ensure it starts with /api
+  // Vercel's rewrite captures the path after /api/, so we need to add it back
+  let finalUrl = incomingUrl;
+  
+  if (!finalUrl.startsWith('/api')) {
+    // This is likely the captured path segment (e.g., "auth/register" or "/auth/register")
+    const queryString = finalUrl.includes('?') ? finalUrl.substring(finalUrl.indexOf('?')) : '';
+    const pathOnly = finalUrl.split('?')[0];
+    
+    // Ensure path starts with /, then add /api prefix
+    const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
+    finalUrl = '/api' + normalizedPath + queryString;
+    
+    // Update request properties
+    req.url = finalUrl;
+    req.originalUrl = finalUrl;
+    
+    console.log('🔄 Normalized path:', incomingUrl, '->', finalUrl);
+  } else {
+    // Path already has /api, ensure originalUrl is set
+    if (!req.originalUrl) {
+      req.originalUrl = finalUrl;
+    }
+    if (req.url !== finalUrl) {
+      req.url = finalUrl;
+    }
   }
   
-  // If the URL doesn't start with /api and it's not a special route,
-  // it might be the captured path segment, so add /api prefix
-  if (originalUrl && 
-      !originalUrl.startsWith('/api') && 
-      !originalUrl.startsWith('/health') && 
-      !originalUrl.startsWith('/uploads') &&
-      !originalUrl.startsWith('/socket.io')) {
-    const queryString = originalUrl.includes('?') ? originalUrl.substring(originalUrl.indexOf('?')) : '';
-    const pathOnly = originalUrl.split('?')[0];
-    const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
-    req.url = '/api' + normalizedPath + queryString;
-    req.originalUrl = req.url;
-    console.log('🔄 Normalized path:', originalUrl, '->', req.url);
-  }
+  console.log('📤 Passing to Express:', {
+    method: req.method,
+    url: req.url,
+    originalUrl: req.originalUrl
+  });
   
   // Pass the request to Express app
   // Express will handle routing based on req.url
