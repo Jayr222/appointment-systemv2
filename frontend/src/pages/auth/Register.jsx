@@ -40,6 +40,7 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState({
@@ -94,7 +95,15 @@ const Register = () => {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
+    
+    if (type === 'checkbox') {
+      if (name === 'acceptedTerms') {
+        setAcceptedTerms(checked);
+      }
+      return;
+    }
+    
     setFormData((prev) => ({
       ...prev,
       [name]: value
@@ -119,6 +128,11 @@ const Register = () => {
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setError('You must accept the Terms and Conditions to create an account');
       return;
     }
 
@@ -404,9 +418,45 @@ const Register = () => {
             </div>
           </div>
 
+          <div className="mb-4 mt-4">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="acceptedTerms"
+                checked={acceptedTerms}
+                onChange={handleChange}
+                className="mt-1 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                required
+              />
+              <span className="text-sm text-gray-700">
+                I agree to the{' '}
+                <Link 
+                  to="/terms" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-600 hover:text-primary-800 font-semibold underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Terms and Conditions
+                </Link>
+                {' '}and{' '}
+                <Link 
+                  to="/privacy" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-600 hover:text-primary-800 font-semibold underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Privacy Policy
+                </Link>
+                <span className="text-red-500">*</span>
+              </span>
+            </label>
+          </div>
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !acceptedTerms}
             className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed mt-4"
           >
             {loading ? 'Creating Account...' : 'Create Account'}
@@ -421,19 +471,6 @@ const Register = () => {
             </p>
           </div>
         </form>
-        
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-xs text-center text-gray-500">
-            By registering, you agree to our{' '}
-            <Link to="/terms" className="text-primary-600 hover:text-primary-800 font-semibold">
-              Terms and Conditions
-            </Link>
-            {' '}and{' '}
-            <Link to="/privacy" className="text-primary-600 hover:text-primary-800 font-semibold">
-              Privacy Policy
-            </Link>
-          </p>
-        </div>
       </div>
     </div>
   );
