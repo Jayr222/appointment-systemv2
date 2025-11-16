@@ -72,7 +72,7 @@ const Sidebar = () => {
     <div 
       className={`text-white h-screen fixed left-0 top-0 shadow-lg flex flex-col transition-all duration-300 ease-in-out ${
         isCollapsed ? 'w-20' : 'w-64'
-      }`}
+      } md:translate-x-0 ${isCollapsed ? '' : ''} z-20 md:z-auto transform md:transform-none bg-[#31694E] md:bg-transparent ${isCollapsed ? '' : ''} ${isCollapsed ? '' : ''}`}
       style={{ backgroundColor: '#31694E' }}
     >
       {/* Header with Logo and Toggle */}
@@ -103,7 +103,7 @@ const Sidebar = () => {
         <Tooltip content={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} position="right">
           <button
             onClick={toggleSidebar}
-            className="w-full p-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 text-white transition-all duration-300 flex items-center justify-center"
+            className="w-full p-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 text-white transition-all duration-300 flex items-center justify-center md:hidden"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? (

@@ -72,8 +72,7 @@ const GoogleSignIn = () => {
           onError={handleError}
           useOneTap={false}
           text="signin_with"
-          size="large"
-          width="100%"
+            size="large"
           shape="rectangular"
           theme="outline"
         />

@@ -139,9 +139,9 @@ const Login = () => {
       <AppBar />
       
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-between px-8 md:px-16 lg:px-24 pt-20 relative z-10">
+      <div className="flex-1 flex flex-col md:flex-row items-stretch md:items-center justify-between px-4 sm:px-8 md:px-16 lg:px-24 pt-16 md:pt-20 gap-6 md:gap-10 relative z-10">
         {/* Hero Text Section - Left Side */}
-        <div className="w-1/2 hidden md:flex flex-col justify-center bg-white/70 backdrop-blur-sm rounded-tr-[100px] p-10">
+        <div className="hidden md:flex w-full md:w-1/2 flex-col justify-center bg-white/70 backdrop-blur-sm rounded-tr-[60px] md:rounded-tr-[100px] p-6 md:p-10">
           <h2 className="text-5xl font-extrabold text-[#0c1b4d] mb-4 leading-snug">
             Your Community's <br /> Trusted for Health
           </h2>
@@ -157,9 +157,9 @@ const Login = () => {
         </div>
         
         {/* Login Form - Right Side */}
-        <div className="w-full md:w-[380px] flex justify-center">
-          <div className="bg-white rounded-2xl shadow-2xl w-full p-7 animate-fadeIn scale-[0.98] hover:scale-[1.0] transition-transform duration-300">
-            <h3 className="text-2xl font-bold text-center text-gray-800 mb-5">Log in</h3>
+        <div className="w-full md:w-[420px] flex justify-center mx-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full p-6 md:p-7 animate-fadeIn">
+            <h3 className="text-xl md:text-2xl font-bold text-center text-gray-800 mb-4 md:mb-5">Log in</h3>
 
             {error && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">
