@@ -138,41 +138,20 @@ app.use('/api/auth', (req, res, next) => {
 });
 
 // Path normalization for Vercel serverless functions
-// Vercel's rewrite rule sends /api/:path* to /api/index.js
-// The req.url might already include /api or might not, so we normalize it
+// Note: Path normalization is now handled in api/index.js before the request reaches Express
+// This middleware is kept as a fallback but should rarely be needed
 if (process.env.VERCEL) {
   app.use((req, res, next) => {
-    // Log the incoming request for debugging
-    console.log('📥 Vercel request (before normalization):', {
-      method: req.method,
-      url: req.url,
-      path: req.path,
-      originalUrl: req.originalUrl
-    });
-    
-    // Get the current URL - prefer originalUrl as it contains the full path before any modifications
-    const currentUrl = req.originalUrl || req.url || '';
-    const queryString = currentUrl.includes('?') ? currentUrl.substring(currentUrl.indexOf('?')) : '';
-    const pathOnly = currentUrl.split('?')[0];
-    
-    // If the path doesn't start with /api, add it
-    // This handles the case where Vercel might strip /api from the path
-    if (!pathOnly.startsWith('/api')) {
+    // Only normalize if the path doesn't already start with /api
+    // The api/index.js handler should have already normalized it
+    const currentUrl = req.url || req.path || '';
+    if (currentUrl && !currentUrl.startsWith('/api') && !currentUrl.startsWith('/health') && !currentUrl.startsWith('/uploads')) {
+      const queryString = currentUrl.includes('?') ? currentUrl.substring(currentUrl.indexOf('?')) : '';
+      const pathOnly = currentUrl.split('?')[0];
       const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
       req.url = '/api' + normalizedPath + queryString;
-      console.log('🔄 Vercel path normalization:', currentUrl, '->', req.url);
+      console.log('🔄 Fallback path normalization:', currentUrl, '->', req.url);
     }
-    // If it already starts with /api, ensure req.url is set correctly
-    else if (req.url !== pathOnly + queryString) {
-      req.url = pathOnly + queryString;
-    }
-    
-    console.log('📤 Vercel request (after normalization):', {
-      method: req.method,
-      url: req.url,
-      path: req.path
-    });
-    
     next();
   });
 }

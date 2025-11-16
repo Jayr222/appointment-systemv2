@@ -2,28 +2,54 @@
 import app from '../backend/src/server.js';
 
 // Vercel serverless function handler
-// This wraps the Express app to handle Vercel's serverless function format
+// Vercel's rewrite rule: /api/:path* -> /api/index.js
+// When this happens, req.url might be the captured path segment (without /api)
+// We need to reconstruct the full path with /api prefix
 export default async (req, res) => {
-  // Ensure VERCEL env var is set for path normalization
+  // Set VERCEL env var for Express middleware
   if (!process.env.VERCEL) {
     process.env.VERCEL = '1';
   }
   
-  // Log the incoming request to understand what Vercel is passing
-  console.log('🔍 Vercel serverless function received:', {
+  // Log incoming request for debugging
+  const originalUrl = req.url || '';
+  const originalOriginalUrl = req.originalUrl || '';
+  
+  console.log('🔍 Serverless function received (before fix):', {
     method: req.method,
-    url: req.url,
-    path: req.path,
-    originalUrl: req.originalUrl,
-    headers: {
-      'x-vercel-rewrite': req.headers['x-vercel-rewrite'],
-      'x-invoke-path': req.headers['x-invoke-path']
-    }
+    url: originalUrl,
+    originalUrl: originalOriginalUrl,
+    path: req.path
   });
   
-  // Vercel's rewrite rule sends /api/:path* to this function
-  // The path might be in req.url, req.originalUrl, or a header
-  // We'll let the Express middleware handle path normalization
+  // Reconstruct the full path
+  // If the URL doesn't start with /api, it's likely the captured path segment
+  // We need to add /api back to it
+  let finalUrl = originalUrl || originalOriginalUrl || '';
+  
+  if (finalUrl && !finalUrl.startsWith('/api') && !finalUrl.startsWith('/health') && !finalUrl.startsWith('/uploads')) {
+    // This is the captured path segment, add /api prefix
+    const queryString = finalUrl.includes('?') ? finalUrl.substring(finalUrl.indexOf('?')) : '';
+    const pathOnly = finalUrl.split('?')[0];
+    finalUrl = '/api' + (pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly) + queryString;
+    
+    // Update req properties
+    req.url = finalUrl;
+    req.originalUrl = finalUrl;
+    
+    console.log('🔄 Reconstructed path:', originalUrl, '->', finalUrl);
+  } else if (!req.originalUrl && req.url) {
+    // Ensure originalUrl is set
+    req.originalUrl = req.url;
+  }
+  
+  console.log('📤 Passing to Express:', {
+    method: req.method,
+    url: req.url,
+    originalUrl: req.originalUrl
+  });
+  
+  // Pass request to Express
   return app(req, res);
 };
 
