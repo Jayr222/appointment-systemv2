@@ -2,49 +2,46 @@
 import express from 'express';
 import app from '../backend/src/server.js';
 
-// Vercel sometimes invokes the function with the path stripped of the /api prefix.
-// Normalize the URL so our Express app (which mounts routes under /api) always matches.
-const server = express();
+// Create a wrapper to handle Vercel's routing
+// Vercel's rewrite rule routes /api/* to this function, but may strip the /api prefix
+const handler = express();
 
-// Add request logging middleware first
-server.use((req, res, next) => {
-  console.log('🔵 api/index.js - Incoming request:', {
+// Middleware to ensure /api prefix is preserved
+handler.use((req, res, next) => {
+  // Log the incoming request for debugging
+  const originalUrl = req.url;
+  
+  console.log('🔵 Vercel handler - Incoming request:', {
     method: req.method,
     url: req.url,
     path: req.path,
-    originalUrl: req.originalUrl,
-    query: req.query,
-    headers: {
-      'content-type': req.headers['content-type'],
-      'authorization': req.headers['authorization'] ? 'present' : 'missing'
-    }
+    originalUrl: req.originalUrl
   });
-  next();
-});
 
-// URL normalization middleware
-server.use((req, res, next) => {
-  const originalUrl = req.url;
+  // Vercel's rewrite rule routes /api/* to this function
+  // The path might already include /api, or Vercel might strip it
+  // Ensure the path always starts with /api for our Express routes
+  // Check both url and path to handle different Vercel behaviors
+  const hasApiPrefix = req.url.startsWith('/api') || req.path.startsWith('/api');
   
-  // Don't modify /uploads paths - they should go directly to Express routes
-  if (req.url.startsWith('/uploads/')) {
-    console.log('   ✅ /uploads path detected - passing through unchanged');
-    return next();
-  }
-  
-  // For /api routes, ensure they have the /api prefix
-  // Vercel might strip /api from the path when routing to the function
-  if (!req.url.startsWith('/api/')) {
-    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
-    console.log('   🔄 Modified URL:', originalUrl, '->', req.url);
+  if (!hasApiPrefix) {
+    // Add /api prefix if missing
+    // Preserve query string if present
+    const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    const pathOnly = req.url.split('?')[0];
+    const newPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
+    req.url = '/api' + newPath + queryString;
+    console.log('   🔄 Normalized URL:', originalUrl, '->', req.url);
   } else {
-    console.log('   ✅ /api path detected - passing through unchanged');
+    console.log('   ✅ Path already has /api prefix');
   }
+
   next();
 });
 
-server.use(app);
+// Mount the Express app
+handler.use(app);
 
-export default server;
+export default handler;
 
 
