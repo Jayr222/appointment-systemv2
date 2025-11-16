@@ -583,7 +583,7 @@ const Profile = () => {
                   <FaCamera />
                   {avatarLoading ? 'Uploading...' : 'Change Avatar'}
                 </label>
-                <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF up to 2MB</p>
+                <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF up to 5MB</p>
               </div>
             </div>
           </div>
