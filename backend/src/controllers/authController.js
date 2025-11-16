@@ -278,27 +278,49 @@ export const uploadAvatar = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Delete old avatar if exists and it's not a URL
-    if (user.avatar && !user.avatar.startsWith('http')) {
-      ensureAvatarUploadDirExists();
-      const oldAvatarPath = path.join(AVATARS_DIR, user.avatar);
-      try {
-        await fs.rm(oldAvatarPath, { force: true });
-      } catch (error) {
-        console.error('Error deleting old avatar:', error);
+    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    let avatarValue;
+
+    if (isServerless) {
+      // On serverless (Vercel): Convert to base64 data URL and store in database
+      const base64 = req.file.buffer.toString('base64');
+      const mimeType = req.file.mimetype;
+      avatarValue = `data:${mimeType};base64,${base64}`;
+    } else {
+      // On local dev: Store filename and use filesystem
+      // Delete old avatar if exists and it's not a URL
+      if (user.avatar && !user.avatar.startsWith('http') && !user.avatar.startsWith('data:')) {
+        ensureAvatarUploadDirExists();
+        const oldAvatarPath = path.join(AVATARS_DIR, user.avatar);
+        try {
+          await fs.rm(oldAvatarPath, { force: true });
+        } catch (error) {
+          console.error('Error deleting old avatar:', error);
+        }
       }
+      avatarValue = req.file.filename;
     }
 
-    // Update user with new avatar filename
-    user.avatar = req.file.filename;
+    // Update user with new avatar
+    user.avatar = avatarValue;
     await user.save();
 
     // Log activity
     await logActivity(user._id, 'upload_avatar', 'auth', 'Avatar uploaded');
 
+    // Return appropriate avatar URL
+    let avatarUrl;
+    if (isServerless && avatarValue.startsWith('data:')) {
+      // Return the data URL directly
+      avatarUrl = avatarValue;
+    } else {
+      // Return the file path
+      avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    }
+
     res.json({
       success: true,
-      avatar: `/uploads/avatars/${req.file.filename}`,
+      avatar: avatarUrl,
       user
     });
   } catch (error) {

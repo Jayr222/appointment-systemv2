@@ -49,12 +49,37 @@ app.use(express.urlencoded({ extended: true }));
 // Trust proxy for accurate IP addresses (if behind reverse proxy)
 app.set('trust proxy', 1);
 
-// Serve static files (avatars and uploads)
+// Serve static files (avatars and uploads) - only in non-serverless environments
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-app.use('/uploads', express.static(join(__dirname, '../uploads')));
+const uploadsPath = join(__dirname, '../uploads');
+
+// Only serve static files if the uploads directory exists (local dev)
+if (fs.existsSync(uploadsPath) && !process.env.VERCEL) {
+  app.use('/uploads', express.static(uploadsPath));
+} else {
+  // On Vercel/serverless: serve files via API route (for filesystem-based avatars)
+  // Note: Avatars uploaded on serverless are stored as base64 data URLs in the database
+  app.get('/uploads/avatars/:filename', async (req, res) => {
+    try {
+      const { filename } = req.params;
+      // Try to read from filesystem first (in case file exists from local upload)
+      const filePath = join(uploadsPath, 'avatars', filename);
+      if (fs.existsSync(filePath)) {
+        return res.sendFile(filePath);
+      }
+      // If file doesn't exist, it might be stored as base64 in database
+      // The avatar URL in the database will be the data URL itself
+      res.status(404).json({ message: 'File not found' });
+    } catch (error) {
+      console.error('Error serving file:', error);
+      res.status(500).json({ message: 'Error serving file' });
+    }
+  });
+}
 
 // Routes
 app.use('/api/auth', authRoutes);

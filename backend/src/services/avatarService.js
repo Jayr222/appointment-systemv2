@@ -15,8 +15,11 @@ const ensureAvatarsDir = () => {
   return avatarsDir;
 };
 
-// Configure storage for avatars
-const storage = multer.diskStorage({
+// On Vercel/serverless, use memory storage (files don't persist to filesystem)
+// In local dev, use disk storage
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+const diskStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     try {
       cb(null, ensureAvatarsDir());
@@ -29,6 +32,10 @@ const storage = multer.diskStorage({
     cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
+
+const memoryStorage = multer.memoryStorage();
+
+const storage = isServerless ? memoryStorage : diskStorage;
 
 // File filter for images only
 const fileFilter = (req, file, cb) => {
