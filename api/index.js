@@ -4,34 +4,59 @@ import app from '../backend/src/server.js';
 
 // Vercel serverless function handler
 // Vercel's rewrite rule: /api/(.*) -> /api/index.js
-// When Vercel rewrites, the captured group (.*) might be passed in req.url
-// We need to reconstruct the full /api path
+// When Vercel rewrites, req.url should contain the original full path
+// But we need to handle cases where it might be just the captured group
 export default async (req, res) => {
-  // Set VERCEL env var (should already be set, but ensure it)
+  // Set VERCEL env var
   process.env.VERCEL = '1';
   
-  // Get the incoming URL - Vercel might pass it in different ways
-  let incomingUrl = req.url || req.originalUrl || '';
+  // Get all possible URL sources
+  const urlFromReq = req.url || '';
+  const urlFromOriginal = req.originalUrl || '';
+  const urlFromHeaders = req.headers['x-invoke-path'] || req.headers['x-vercel-rewrite'] || '';
+  
+  // Use the first available URL source
+  let incomingUrl = urlFromHeaders || urlFromOriginal || urlFromReq;
   
   // Log for debugging
   console.log('🔍 Vercel serverless function received:', {
     method: req.method,
     url: req.url,
     originalUrl: req.originalUrl,
-    incomingUrl: incomingUrl,
-    path: req.path
+    headers: {
+      'x-invoke-path': req.headers['x-invoke-path'],
+      'x-vercel-rewrite': req.headers['x-vercel-rewrite']
+    },
+    incomingUrl: incomingUrl
   });
   
-  // Normalize the path to ensure it starts with /api
-  // Vercel's rewrite captures the path after /api/, so we need to add it back
-  let finalUrl = incomingUrl;
+  // Handle empty URL case
+  if (!incomingUrl || incomingUrl === '') {
+    console.error('❌ Empty URL received!');
+    return res.status(400).json({ 
+      error: 'Bad request: No URL found',
+      debug: {
+        reqUrl: req.url,
+        originalUrl: req.originalUrl,
+        headers: Object.keys(req.headers)
+      }
+    });
+  }
   
-  if (!finalUrl.startsWith('/api')) {
-    // This is likely the captured path segment (e.g., "auth/register" or "/auth/register")
-    const queryString = finalUrl.includes('?') ? finalUrl.substring(finalUrl.indexOf('?')) : '';
-    const pathOnly = finalUrl.split('?')[0];
-    
-    // Ensure path starts with /, then add /api prefix
+  // Normalize the path to ensure it starts with /api
+  let finalUrl = incomingUrl;
+  const queryString = finalUrl.includes('?') ? finalUrl.substring(finalUrl.indexOf('?')) : '';
+  let pathOnly = finalUrl.split('?')[0];
+  
+  // Remove trailing slash for consistency (except for root paths)
+  if (pathOnly !== '/' && pathOnly !== '/api' && pathOnly.endsWith('/')) {
+    pathOnly = pathOnly.slice(0, -1);
+  }
+  
+  // If path doesn't start with /api, add it
+  if (!pathOnly.startsWith('/api')) {
+    // This is likely the captured path segment from the rewrite rule
+    // Ensure it starts with /, then add /api prefix
     const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
     finalUrl = '/api' + normalizedPath + queryString;
     
@@ -41,19 +66,19 @@ export default async (req, res) => {
     
     console.log('🔄 Normalized path:', incomingUrl, '->', finalUrl);
   } else {
-    // Path already has /api, ensure originalUrl is set
+    // Path already has /api, ensure both url and originalUrl are set correctly
+    finalUrl = pathOnly + queryString;
+    req.url = finalUrl;
     if (!req.originalUrl) {
       req.originalUrl = finalUrl;
     }
-    if (req.url !== finalUrl) {
-      req.url = finalUrl;
-    }
   }
   
-  console.log('📤 Passing to Express:', {
+  console.log('📤 Final request to Express:', {
     method: req.method,
     url: req.url,
-    originalUrl: req.originalUrl
+    originalUrl: req.originalUrl,
+    path: req.path
   });
   
   // Pass the request to Express app
@@ -62,6 +87,7 @@ export default async (req, res) => {
     app(req, res);
   } catch (error) {
     console.error('❌ Error in serverless function:', error);
+    console.error('   Stack:', error.stack);
     if (!res.headersSent) {
       res.status(500).json({ 
         error: 'Internal server error',

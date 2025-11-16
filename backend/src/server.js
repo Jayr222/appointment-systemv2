@@ -189,6 +189,36 @@ app.get('/', (req, res) => {
   });
 });
 
+// Handle /api/ root route (with trailing slash)
+app.get('/api/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Healthcare System API',
+    endpoints: {
+      auth: '/api/auth/*',
+      patient: '/api/patient/*',
+      doctor: '/api/doctor/*',
+      admin: '/api/admin/*',
+      messages: '/api/messages/*'
+    },
+    test: '/api/test',
+    health: '/health'
+  });
+});
+
+// Test route to verify serverless function is working
+app.get('/api/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Serverless function is working!',
+    timestamp: new Date().toISOString(),
+    url: req.url,
+    originalUrl: req.originalUrl,
+    path: req.path,
+    method: req.method
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
