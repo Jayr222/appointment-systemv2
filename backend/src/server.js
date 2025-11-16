@@ -46,10 +46,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Log all requests for debugging
+// Log all requests for debugging (especially /uploads paths)
 app.use((req, res, next) => {
-  if (req.path.includes('/api/auth/avatar')) {
+  if (req.path.includes('/uploads') || req.path.includes('/api/auth/avatar')) {
     console.log('🌐 Incoming request:', req.method, req.path, req.url, req.headers['content-type']);
+    console.log('   Original URL:', req.originalUrl);
   }
   next();
 });
@@ -65,35 +66,48 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const uploadsPath = join(__dirname, '../uploads');
 
-// Only serve static files if the uploads directory exists (local dev)
-if (fs.existsSync(uploadsPath) && !process.env.VERCEL) {
-  app.use('/uploads', express.static(uploadsPath));
-} else {
+// Handle /uploads routes BEFORE any other routes
+// On Vercel/serverless: serve files via API route (for filesystem-based avatars)
+if (process.env.VERCEL || !fs.existsSync(uploadsPath)) {
   // On Vercel/serverless: serve files via API route (for filesystem-based avatars)
   // Note: Avatars uploaded on serverless are stored as base64 data URLs in the database
   // Old avatars stored as filenames won't exist on serverless - return 404 gracefully
+  console.log('📁 Setting up /uploads/avatars route for serverless environment');
   app.get('/uploads/avatars/:filename', async (req, res) => {
+    console.log('🖼️ /uploads/avatars route hit:', req.method, req.url, req.path);
+    console.log('   Filename param:', req.params.filename);
+    console.log('   Original URL:', req.originalUrl);
     try {
       const { filename } = req.params;
       // Try to read from filesystem first (in case file exists from local upload)
       const filePath = join(uploadsPath, 'avatars', filename);
+      console.log('   Checking file path:', filePath);
       if (fs.existsSync(filePath)) {
+        console.log('   ✅ File exists, sending file');
         return res.sendFile(filePath);
       }
       // File doesn't exist - this is expected for old avatars on serverless
+      console.log('   ❌ File not found (expected for old avatars on serverless)');
       // Return 404 with proper headers so browser can handle it gracefully
       res.status(404).set('Content-Type', 'application/json').json({ 
         message: 'Avatar file not found. This avatar may have been uploaded before serverless deployment.',
         error: 'File not found'
       });
     } catch (error) {
-      console.error('Error serving avatar file:', error);
+      console.error('❌ Error serving avatar file:', error);
       res.status(500).set('Content-Type', 'application/json').json({ 
         message: 'Error serving file',
         error: 'Internal server error'
       });
     }
   });
+  console.log('✅ /uploads/avatars route registered');
+}
+
+// Local development: serve static files if uploads directory exists
+if (fs.existsSync(uploadsPath) && !process.env.VERCEL) {
+  app.use('/uploads', express.static(uploadsPath));
+  console.log('📁 Static file serving enabled for /uploads');
 }
 
 // Log all incoming requests to /api/auth for debugging
