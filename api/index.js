@@ -60,9 +60,11 @@ export default async (req, res) => {
     const normalizedPath = pathOnly.startsWith('/') ? pathOnly : '/' + pathOnly;
     finalUrl = '/api' + normalizedPath + queryString;
     
-    // Update request properties
+    // Update request properties - Express uses both url and path for routing
     req.url = finalUrl;
     req.originalUrl = finalUrl;
+    // Also update req.path (Express derives this from req.url, but let's be explicit)
+    req.path = pathOnly.startsWith('/') ? '/api' + pathOnly : '/api/' + pathOnly;
     
     console.log('🔄 Normalized path:', incomingUrl, '->', finalUrl);
   } else {
@@ -72,13 +74,16 @@ export default async (req, res) => {
     if (!req.originalUrl) {
       req.originalUrl = finalUrl;
     }
+    // Ensure req.path is set correctly (Express should derive this, but be explicit)
+    req.path = pathOnly;
   }
   
   console.log('📤 Final request to Express:', {
     method: req.method,
     url: req.url,
     originalUrl: req.originalUrl,
-    path: req.path
+    path: req.path,
+    baseUrl: req.baseUrl
   });
   
   // Pass the request to Express app
