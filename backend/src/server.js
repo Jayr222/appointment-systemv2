@@ -18,6 +18,7 @@ import queueRoutes from './routes/queueRoutes.js';
 import siteContentRoutes from './routes/siteContentRoutes.js';
 import doctorAvailabilityRoutes from './routes/doctorAvailabilityRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
+import { getFileFromStorage } from './services/storageService.js';
 
 // Connect to database and ensure default admin exists
 await connectDB();
@@ -109,6 +110,25 @@ if (fs.existsSync(uploadsPath) && !process.env.VERCEL) {
   app.use('/uploads', express.static(uploadsPath));
   console.log('📁 Static file serving enabled for /uploads');
 }
+
+// GridFS storage route - serve files from MongoDB
+app.get('/api/storage/avatars/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const fileData = await getFileFromStorage(fileId);
+    
+    res.set({
+      'Content-Type': fileData.contentType,
+      'Content-Length': fileData.length,
+      'Cache-Control': 'public, max-age=31536000' // Cache for 1 year
+    });
+    
+    fileData.stream.pipe(res);
+  } catch (error) {
+    console.error('Error serving file from GridFS:', error);
+    res.status(404).json({ message: 'File not found' });
+  }
+});
 
 // Log all incoming requests to /api/auth for debugging
 app.use('/api/auth', (req, res, next) => {

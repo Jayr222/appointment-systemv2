@@ -18,16 +18,26 @@ const Avatar = ({ user, size = 'md', className = '', showName = false }) => {
   const getAvatarUrl = () => {
     if (!user?.avatar) return null;
     
-    // If it's a base64 data URL (stored in database for serverless), return as is
+    // If it's a base64 data URL (stored in database), return as is
     if (user.avatar.startsWith('data:')) {
       return user.avatar;
     }
     
-    // If it's already a full URL (Google OAuth), return as is
+    // If it's already a full URL (Google OAuth or external), return as is
     if (user.avatar.startsWith('http://') || user.avatar.startsWith('https://')) {
       return user.avatar;
     }
     
+    // If it's a GridFS URL (MongoDB storage)
+    if (user.avatar.startsWith('/api/storage/')) {
+      const isProduction = import.meta.env.PROD;
+      if (isProduction && API_URL) {
+        return `${API_URL}${user.avatar}`;
+      }
+      return user.avatar;
+    }
+    
+    // Legacy local filesystem paths
     // In production, if API_URL is set, use it (backend on different domain)
     // In development, use relative path (proxy handles it)
     const isProduction = import.meta.env.PROD;

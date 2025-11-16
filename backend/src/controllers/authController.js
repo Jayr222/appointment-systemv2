@@ -9,6 +9,7 @@ import { logActivity, logError } from '../services/loggingService.js';
 import { noteFailedLogin, resetLoginAttempts } from '../middleware/rateLimiter.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 import { AVATARS_DIR, ensureAvatarUploadDirExists } from '../services/avatarService.js';
+import { uploadToStorage, deleteFromStorage, getStorageTypeFromUrl } from '../services/storageService.js';
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -290,22 +291,26 @@ export const uploadAvatar = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
-    let avatarValue;
-
-    if (isServerless) {
-      // On serverless (Vercel): Convert to base64 data URL and store in database
-      if (!req.file.buffer) {
-        console.error('Upload avatar: No buffer in file object on serverless');
-        return res.status(500).json({ message: 'File processing error. Please try again.' });
-      }
-      const base64 = req.file.buffer.toString('base64');
-      const mimeType = req.file.mimetype || 'image/jpeg';
-      avatarValue = `data:${mimeType};base64,${base64}`;
+    // Get file buffer (from memory storage on serverless or disk storage locally)
+    let fileBuffer;
+    if (req.file.buffer) {
+      fileBuffer = req.file.buffer;
+    } else if (req.file.path) {
+      // Local filesystem - read the file
+      fileBuffer = await fs.readFile(req.file.path);
     } else {
-      // On local dev: Store filename and use filesystem
-      // Delete old avatar if exists and it's not a URL
-      if (user.avatar && !user.avatar.startsWith('http') && !user.avatar.startsWith('data:')) {
+      console.error('Upload avatar: No file buffer or path available');
+      return res.status(500).json({ message: 'File processing error. Please try again.' });
+    }
+
+    // Delete old avatar from storage if it exists
+    if (user.avatar) {
+      const storageType = getStorageTypeFromUrl(user.avatar);
+      // Only delete from cloud storage, not local files or data URLs (handled separately)
+      if (storageType && storageType !== 'local' && storageType !== 'database') {
+        await deleteFromStorage(user.avatar, storageType);
+      } else if (!user.avatar.startsWith('http') && !user.avatar.startsWith('data:')) {
+        // Delete local file
         ensureAvatarUploadDirExists();
         const oldAvatarPath = path.join(AVATARS_DIR, user.avatar);
         try {
@@ -314,8 +319,27 @@ export const uploadAvatar = async (req, res) => {
           console.error('Error deleting old avatar:', error);
         }
       }
+    }
+
+    // Upload to cloud storage (or use local/filesystem)
+    const mimeType = req.file.mimetype || 'image/jpeg';
+    const filename = req.file.originalname || `avatar-${Date.now()}.jpg`;
+    const uploadResult = await uploadToStorage(fileBuffer, filename, mimeType, 'avatars');
+
+    let avatarValue;
+    let avatarUrl;
+
+    if (uploadResult) {
+      // Cloud storage was used
+      avatarValue = uploadResult.url;
+      avatarUrl = uploadResult.url;
+      console.log(`✅ Avatar uploaded to ${uploadResult.storageType || 'cloud storage'}: ${avatarUrl}`);
+    } else {
+      // Local filesystem storage
       const fileExt = req.file.originalname ? path.extname(req.file.originalname) : '.jpg';
       avatarValue = req.file.filename || `avatar-${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExt}`;
+      avatarUrl = `/uploads/avatars/${avatarValue}`;
+      console.log(`✅ Avatar saved to local filesystem: ${avatarUrl}`);
     }
 
     // Update user with new avatar
@@ -324,17 +348,6 @@ export const uploadAvatar = async (req, res) => {
 
     // Log activity
     await logActivity(user._id, 'upload_avatar', 'auth', 'Avatar uploaded');
-
-    // Return appropriate avatar URL
-    let avatarUrl;
-    if (isServerless && avatarValue.startsWith('data:')) {
-      // Return the data URL directly
-      avatarUrl = avatarValue;
-    } else {
-      // Return the file path (filename is set when using disk storage)
-      const filename = req.file.filename || req.file.originalname;
-      avatarUrl = `/uploads/avatars/${filename}`;
-    }
 
     // Update user object in response (remove password)
     const userResponse = user.toObject();
