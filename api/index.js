@@ -2,6 +2,39 @@
 // Import the Express app - it handles all route registration
 import app from '../backend/src/server.js';
 
+// CORS helper function - apply CORS headers
+const setCorsHeaders = (res, origin) => {
+  // Allow all .vercel.app domains and specific origins
+  const allowedOrigins = [
+    'https://appointment-systemv2.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:5174'
+  ];
+  
+  // Get frontend URL from environment if set
+  const frontendUrl = process.env.FRONTEND_URL;
+  if (frontendUrl && !allowedOrigins.includes(frontendUrl)) {
+    allowedOrigins.push(frontendUrl);
+  }
+  
+  // Check if origin is allowed
+  const isAllowed = !origin || 
+                    allowedOrigins.includes(origin) || 
+                    origin.includes('.vercel.app');
+  
+  if (isAllowed && origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+};
+
 // Vercel serverless function handler
 // Vercel's rewrite rule: /api/(.*) -> /api/index.js
 // When Vercel rewrites, req.url should contain the original full path
@@ -9,6 +42,18 @@ import app from '../backend/src/server.js';
 export default async (req, res) => {
   // Set VERCEL env var
   process.env.VERCEL = '1';
+  
+  // Get origin from request headers
+  const origin = req.headers.origin || req.headers.referer?.split('/').slice(0, 3).join('/');
+  
+  // Handle OPTIONS preflight request
+  if (req.method === 'OPTIONS') {
+    setCorsHeaders(res, origin);
+    return res.status(200).end();
+  }
+  
+  // Set CORS headers for all requests
+  setCorsHeaders(res, origin);
   
   // Get all possible URL sources
   const urlFromReq = req.url || '';

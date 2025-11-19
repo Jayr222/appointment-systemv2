@@ -50,6 +50,7 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     
     const allowedOrigins = [
+      'https://appointment-systemv2.vercel.app',
       config.FRONTEND_URL,
       'http://localhost:5173',
       'http://localhost:3000',
@@ -61,22 +62,32 @@ const corsOptions = {
       allowedOrigins.push(config.FRONTEND_URL);
     }
     
-    // Also allow Vercel preview URLs (they match *.vercel.app pattern)
+    // Also allow all Vercel preview URLs (they match *.vercel.app pattern)
     const isVercelPreview = origin.includes('.vercel.app');
     
     if (allowedOrigins.includes(origin) || isVercelPreview) {
       callback(null, true);
     } else {
       console.warn('⚠️  CORS: Origin not allowed:', origin);
-      callback(null, true); // Allow all for now, but log warning
+      // In production, still allow but log warning
+      callback(null, true);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 };
 
+// Apply CORS middleware
 app.use(cors(corsOptions));
+
+// Handle OPTIONS requests explicitly (fallback)
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
