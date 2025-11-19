@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import GoogleAccountConnect from '../../components/shared/GoogleAccountConnect';
 
 const Profile = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [formData, setFormData] = useState({
     name: user?.name || '',
@@ -556,7 +556,8 @@ const Profile = () => {
                       try {
                         setMessage('');
                         const response = await authService.uploadAvatar(file);
-                        updateProfile({ ...user, avatar: response.user?.avatar || response.avatar });
+                        // Refresh user data from server to get updated avatar
+                        await refreshUser();
                         setMessage('Avatar updated successfully');
                         // Clear the file input
                         e.target.value = '';
