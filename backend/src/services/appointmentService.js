@@ -93,6 +93,38 @@ export const checkAvailability = async (doctorId, date, time) => {
       };
     }
 
+    // Check system-wide default lunch break: 12:00 PM - 1:00 PM
+    const parseTimeToMinutesForCheck = (timeStr) => {
+      if (!timeStr) return null;
+      const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+      if (match) {
+        const hour = parseInt(match[1]);
+        const minute = parseInt(match[2]);
+        return hour * 60 + minute;
+      }
+      const match12 = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (match12) {
+        let hour = parseInt(match12[1]);
+        const minute = parseInt(match12[2]);
+        const period = match12[3].toUpperCase();
+        if (period === 'PM' && hour !== 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+        return hour * 60 + minute;
+      }
+      return null;
+    };
+    
+    const appointmentMinutes = parseTimeToMinutesForCheck(time);
+    const LUNCH_BREAK_START = 12 * 60; // 12:00 PM = 720 minutes
+    const LUNCH_BREAK_END = 13 * 60;   // 1:00 PM = 780 minutes
+    
+    if (appointmentMinutes !== null && appointmentMinutes >= LUNCH_BREAK_START && appointmentMinutes < LUNCH_BREAK_END) {
+      return {
+        available: false,
+        reason: 'Appointments cannot be scheduled during lunch break (12:00 PM - 1:00 PM). Please select another time.'
+      };
+    }
+    
     // Check if doctor has a break at this time
     const hasBreak = await DoctorBreakTime.hasBreakAtTime(doctorId, date, time);
     if (hasBreak) {
@@ -252,7 +284,20 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
           
           if (isBooked) return false;
           
-          // Check if slot falls within any break time
+          // System-wide default lunch break: 12:00 PM - 1:00 PM (applies to all doctors)
+          // Check if slot overlaps with lunch break (12:00 - 13:00 in 24-hour format)
+          const LUNCH_BREAK_START = 12 * 60; // 12:00 PM = 720 minutes
+          const LUNCH_BREAK_END = 13 * 60;   // 1:00 PM = 780 minutes
+          const slotStartMinutes = slot.hour * 60 + slot.minute;
+          const slotEndMinutes = slotStartMinutes + 30; // 30-minute appointment duration
+          
+          // Check if slot overlaps with lunch break
+          const isLunchBreak = slotStartMinutes < LUNCH_BREAK_END && slotEndMinutes > LUNCH_BREAK_START;
+          if (isLunchBreak) {
+            return false; // Exclude lunch break slots
+          }
+          
+          // Check if slot falls within any doctor-specific break time
           // Since appointments are 30 minutes, we need to check if the slot overlaps with break time
           const checkDate = new Date(date);
           const dayOfWeek = checkDate.getDay();
@@ -270,8 +315,6 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
             // Slots are 30 minutes, so check if slot overlaps with break range
             const breakStartMinutes = parseTimeToMinutes(breakTime.startTime);
             const breakEndMinutes = parseTimeToMinutes(breakTime.endTime);
-            const slotStartMinutes = slot.hour * 60 + slot.minute;
-            const slotEndMinutes = slotStartMinutes + 30; // 30-minute appointment duration
             
             if (breakStartMinutes === null || breakEndMinutes === null) return false;
             
@@ -370,7 +413,20 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
       
       if (isBooked) return false;
       
-      // Check if slot falls within any break time
+      // System-wide default lunch break: 12:00 PM - 1:00 PM (applies to all doctors)
+      // Check if slot overlaps with lunch break (12:00 - 13:00 in 24-hour format)
+      const LUNCH_BREAK_START = 12 * 60; // 12:00 PM = 720 minutes
+      const LUNCH_BREAK_END = 13 * 60;   // 1:00 PM = 780 minutes
+      const slotStartMinutes = slot.hour * 60 + slot.minute;
+      const slotEndMinutes = slotStartMinutes + 30; // 30-minute appointment duration
+      
+      // Check if slot overlaps with lunch break
+      const isLunchBreak = slotStartMinutes < LUNCH_BREAK_END && slotEndMinutes > LUNCH_BREAK_START;
+      if (isLunchBreak) {
+        return false; // Exclude lunch break slots
+      }
+      
+      // Check if slot falls within any doctor-specific break time
       // Since appointments are 30 minutes, we need to check if the slot overlaps with break time
       const checkDate = new Date(date);
       const dayOfWeek = checkDate.getDay();
@@ -388,8 +444,6 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
         // Slots are 30 minutes, so check if slot overlaps with break range
         const breakStartMinutes = parseTimeToMinutes(breakTime.startTime);
         const breakEndMinutes = parseTimeToMinutes(breakTime.endTime);
-        const slotStartMinutes = slot.hour * 60 + slot.minute;
-        const slotEndMinutes = slotStartMinutes + 30; // 30-minute appointment duration
         
         if (breakStartMinutes === null || breakEndMinutes === null) return false;
         

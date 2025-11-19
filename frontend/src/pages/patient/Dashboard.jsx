@@ -298,9 +298,15 @@ const Dashboard = () => {
   }, [user, addNotification]);
 
   const handleCancelClick = (appointment) => {
-    // Only allow cancellation for pending or confirmed appointments
-    if (appointment.status === 'pending' || appointment.status === 'confirmed') {
+    // Only allow cancellation for pending appointments
+    if (appointment.status === 'pending') {
       setCancelModal({ show: true, appointment, reason: '' });
+    } else if (appointment.status === 'confirmed') {
+      addNotification({
+        type: 'error',
+        title: 'Cannot Cancel',
+        message: 'You cannot cancel an appointment once it has been confirmed by the doctor. Please contact the clinic for assistance.'
+      });
     }
   };
 
@@ -553,13 +559,18 @@ const Dashboard = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
+                      {appointment.status === 'pending' && (
                         <button
                           onClick={() => handleCancelClick(appointment)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors text-sm font-medium"
                         >
                           <FaTimes /> Cancel
                         </button>
+                      )}
+                      {appointment.status === 'confirmed' && (
+                        <span className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-500 text-sm font-medium cursor-not-allowed" title="Cannot cancel once confirmed by doctor">
+                          <FaTimes className="opacity-50" /> Cancel
+                        </span>
                       )}
                     </td>
                   </tr>

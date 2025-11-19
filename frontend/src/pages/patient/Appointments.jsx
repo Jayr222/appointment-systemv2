@@ -65,11 +65,20 @@ const Appointments = () => {
   }, [appointments, searchQuery]);
 
   const openCancelModal = (appointment) => {
-    setCancelModal({
-      show: true,
-      appointment,
-      reason: ''
-    });
+    // Only allow cancellation for pending appointments
+    if (appointment.status === 'pending') {
+      setCancelModal({
+        show: true,
+        appointment,
+        reason: ''
+      });
+    } else if (appointment.status === 'confirmed') {
+      addNotification({
+        type: 'error',
+        title: 'Cannot Cancel',
+        message: 'You cannot cancel an appointment once it has been confirmed by the doctor. Please contact the clinic for assistance.'
+      });
+    }
   };
 
   const closeCancelModal = () => {
@@ -191,7 +200,7 @@ const Appointments = () => {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
+                    {appointment.status === 'pending' && (
                       <button
                         type="button"
                         onClick={() => openCancelModal(appointment)}
@@ -199,6 +208,11 @@ const Appointments = () => {
                       >
                         <FaTimes /> Cancel
                       </button>
+                    )}
+                    {appointment.status === 'confirmed' && (
+                      <span className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-500 cursor-not-allowed" title="Cannot cancel once confirmed by doctor">
+                        <FaTimes className="opacity-50" /> Cancel
+                      </span>
                     )}
                   </td>
                 </tr>

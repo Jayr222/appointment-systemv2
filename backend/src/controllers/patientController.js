@@ -249,6 +249,20 @@ export const cancelAppointment = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
+    // Prevent cancellation of confirmed appointments
+    if (appointment.status === 'confirmed') {
+      return res.status(400).json({ 
+        message: 'Cannot cancel appointment once it has been confirmed by the doctor. Please contact the clinic for assistance.' 
+      });
+    }
+
+    // Only allow cancellation of pending appointments
+    if (appointment.status !== 'pending') {
+      return res.status(400).json({ 
+        message: `Cannot cancel appointment with status: ${appointment.status}` 
+      });
+    }
+
     appointment.status = 'cancelled';
     appointment.canceledBy = req.user.id;
     appointment.cancellationReason = req.body.reason;
