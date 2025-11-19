@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
-import { FaUser, FaClock, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaBell, FaSearch } from 'react-icons/fa';
+import { FaUser, FaClock, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaBell, FaSearch, FaHeartbeat, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import queueService from '../../services/queueService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from '../../context/NotificationContext';
@@ -14,6 +14,7 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
   const [currentCalled, setCurrentCalled] = useState(null);
   const [calledPatientId, setCalledPatientId] = useState(null); // Track which patient is being called
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedVitals, setExpandedVitals] = useState(new Set()); // Track which cards have expanded vital signs
   const { user } = useAuth();
   const { addNotification, startContinuousRinging, stopContinuousRinging } = useNotifications();
   const navigate = useNavigate();
@@ -414,7 +415,19 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
               : `No queue entries match "${searchQuery}"`}
           </p>
         ) : (
-          filteredQueue.map((appointment) => (
+          filteredQueue.map((appointment) => {
+            const hasVitalSigns = appointment.latestVitalSigns && (
+              appointment.latestVitalSigns.bloodPressure?.systolic ||
+              appointment.latestVitalSigns.heartRate ||
+              appointment.latestVitalSigns.temperature?.value ||
+              appointment.latestVitalSigns.respiratoryRate ||
+              appointment.latestVitalSigns.oxygenSaturation ||
+              appointment.latestVitalSigns.weight?.value ||
+              appointment.latestVitalSigns.painLevel
+            );
+            const isVitalsExpanded = expandedVitals.has(appointment._id);
+
+            return (
             <div
               key={appointment._id}
               className={`p-4 rounded-lg border-2 transition-all ${
@@ -426,11 +439,11 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-1">
                   <div className="text-3xl font-bold" style={{ color: '#31694E' }}>
                     #{appointment.queueNumber}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <FaUser className="text-gray-400" />
                       <p className="font-semibold text-gray-800">
@@ -442,6 +455,115 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
                       <span>•</span>
                       <span>{appointment.appointmentTime}</span>
                     </div>
+                    {/* Vital Signs Display */}
+                    {hasVitalSigns && (
+                      <div className="mt-2">
+                        <button
+                          onClick={() => {
+                            const newExpanded = new Set(expandedVitals);
+                            if (isVitalsExpanded) {
+                              newExpanded.delete(appointment._id);
+                            } else {
+                              newExpanded.add(appointment._id);
+                            }
+                            setExpandedVitals(newExpanded);
+                          }}
+                          className="flex items-center gap-2 text-xs text-[#31694E] hover:text-[#27543e] font-semibold"
+                        >
+                          <FaHeartbeat className="text-[#31694E]" />
+                          {isVitalsExpanded ? (
+                            <>
+                              <span>Hide Vital Signs</span>
+                              <FaChevronUp className="text-xs" />
+                            </>
+                          ) : (
+                            <>
+                              <span>View Vital Signs</span>
+                              <FaChevronDown className="text-xs" />
+                            </>
+                          )}
+                        </button>
+                        {isVitalsExpanded && (
+                          <div className="mt-2 p-3 bg-white rounded-lg border border-[#31694E] shadow-sm">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                              {appointment.latestVitalSigns.bloodPressure?.systolic && (
+                                <div>
+                                  <p className="text-gray-500 font-semibold">BP</p>
+                                  <p className="text-gray-800 font-bold">
+                                    {appointment.latestVitalSigns.bloodPressure.systolic}/{appointment.latestVitalSigns.bloodPressure.diastolic} mmHg
+                                  </p>
+                                </div>
+                              )}
+                              {appointment.latestVitalSigns.heartRate && (
+                                <div>
+                                  <p className="text-gray-500 font-semibold">Heart Rate</p>
+                                  <p className="text-gray-800 font-bold">{appointment.latestVitalSigns.heartRate} bpm</p>
+                                </div>
+                              )}
+                              {appointment.latestVitalSigns.temperature?.value && (
+                                <div>
+                                  <p className="text-gray-500 font-semibold">Temperature</p>
+                                  <p className="text-gray-800 font-bold">
+                                    {appointment.latestVitalSigns.temperature.value}°{appointment.latestVitalSigns.temperature.unit === 'Celsius' ? 'C' : 'F'}
+                                  </p>
+                                </div>
+                              )}
+                              {appointment.latestVitalSigns.respiratoryRate && (
+                                <div>
+                                  <p className="text-gray-500 font-semibold">Respiratory Rate</p>
+                                  <p className="text-gray-800 font-bold">{appointment.latestVitalSigns.respiratoryRate} /min</p>
+                                </div>
+                              )}
+                              {appointment.latestVitalSigns.oxygenSaturation && (
+                                <div>
+                                  <p className="text-gray-500 font-semibold">SpO2</p>
+                                  <p className="text-gray-800 font-bold">{appointment.latestVitalSigns.oxygenSaturation}%</p>
+                                </div>
+                              )}
+                              {appointment.latestVitalSigns.weight?.value && (
+                                <div>
+                                  <p className="text-gray-500 font-semibold">Weight</p>
+                                  <p className="text-gray-800 font-bold">
+                                    {appointment.latestVitalSigns.weight.value} {appointment.latestVitalSigns.weight.unit}
+                                  </p>
+                                </div>
+                              )}
+                              {appointment.latestVitalSigns.height?.value && (
+                                <div>
+                                  <p className="text-gray-500 font-semibold">Height</p>
+                                  <p className="text-gray-800 font-bold">
+                                    {appointment.latestVitalSigns.height.value} {appointment.latestVitalSigns.height.unit}
+                                  </p>
+                                </div>
+                              )}
+                              {appointment.latestVitalSigns.painLevel && (
+                                <div>
+                                  <p className="text-gray-500 font-semibold">Pain Level</p>
+                                  <p className="text-gray-800 font-bold">{appointment.latestVitalSigns.painLevel}/10</p>
+                                </div>
+                              )}
+                            </div>
+                            {appointment.latestVitalSigns.symptoms && appointment.latestVitalSigns.symptoms.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <p className="text-gray-500 font-semibold text-xs mb-1">Symptoms:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {appointment.latestVitalSigns.symptoms.map((symptom, idx) => (
+                                    <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                                      {symptom}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {appointment.latestVitalSigns.recordedBy?.name && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                Recorded by: {appointment.latestVitalSigns.recordedBy.name}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -501,7 +623,8 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

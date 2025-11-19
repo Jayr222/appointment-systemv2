@@ -1,4 +1,5 @@
 import Appointment from '../models/Appointment.js';
+import VitalSigns from '../models/VitalSigns.js';
 import { emitQueueUpdate } from '../utils/socketEmitter.js';
 
 const PRIORITY_WEIGHTS = {
@@ -244,7 +245,64 @@ export const getTodayQueue = async (doctorId = null) => {
       return s ? s : a;
     });
 
-    return result;
+    // Fetch the most recent vital signs for each patient
+    const appointmentsWithVitals = await Promise.all(
+      result.map(async (appointment) => {
+        try {
+          const patientId = appointment.patient?._id || appointment.patient;
+          if (!patientId) {
+            return {
+              ...appointment,
+              latestVitalSigns: null
+            };
+          }
+
+          // Get the most recent vital signs for this patient, preferably linked to this appointment
+          // First try to find vital signs linked to this specific appointment
+          let vitalSigns = await VitalSigns.findOne({
+            patient: patientId,
+            appointment: appointment._id
+          })
+            .populate('recordedBy', 'name')
+            .sort({ createdAt: -1 })
+            .lean();
+
+          // If not found, get the most recent vital signs for this patient (not linked to any appointment)
+          if (!vitalSigns) {
+            vitalSigns = await VitalSigns.findOne({
+              patient: patientId,
+              appointment: { $exists: false }
+            })
+              .populate('recordedBy', 'name')
+              .sort({ createdAt: -1 })
+              .lean();
+          }
+
+          // If still not found, get any recent vital signs for this patient
+          if (!vitalSigns) {
+            vitalSigns = await VitalSigns.findOne({
+              patient: patientId
+            })
+              .populate('recordedBy', 'name')
+              .sort({ createdAt: -1 })
+              .lean();
+          }
+
+          return {
+            ...appointment,
+            latestVitalSigns: vitalSigns || null
+          };
+        } catch (error) {
+          console.error(`Error fetching vital signs for appointment ${appointment._id}:`, error);
+          return {
+            ...appointment,
+            latestVitalSigns: null
+          };
+        }
+      })
+    );
+
+    return appointmentsWithVitals;
   } catch (error) {
     console.error('Error getting today queue:', error);
     throw error;

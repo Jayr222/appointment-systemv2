@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FaHeartbeat, FaSave, FaHistory, FaTimes, FaSearch } from 'react-icons/fa';
+import { FaHeartbeat, FaSave, FaHistory, FaTimes, FaSearch, FaPlus } from 'react-icons/fa';
 import adminService from '../../services/adminService';
 import { useNotifications } from '../../context/NotificationContext';
 
@@ -26,6 +26,8 @@ const VitalSigns = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSymptomModal, setShowSymptomModal] = useState(false);
+  const [symptomInput, setSymptomInput] = useState('');
   const { addNotification } = useNotifications();
 
   useEffect(() => {
@@ -73,12 +75,32 @@ const VitalSigns = () => {
   };
 
   const handleAddSymptom = () => {
-    const symptom = prompt('Enter symptom:');
-    if (symptom && symptom.trim()) {
+    setShowSymptomModal(true);
+    setSymptomInput('');
+  };
+
+  const handleConfirmSymptom = () => {
+    if (symptomInput && symptomInput.trim()) {
       setFormData(prev => ({
         ...prev,
-        symptoms: [...prev.symptoms, symptom.trim()]
+        symptoms: [...prev.symptoms, symptomInput.trim()]
       }));
+      setShowSymptomModal(false);
+      setSymptomInput('');
+    }
+  };
+
+  const handleCancelSymptom = () => {
+    setShowSymptomModal(false);
+    setSymptomInput('');
+  };
+
+  const handleSymptomKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleConfirmSymptom();
+    } else if (e.key === 'Escape') {
+      handleCancelSymptom();
     }
   };
 
@@ -385,9 +407,9 @@ const VitalSigns = () => {
                 <button
                   type="button"
                   onClick={handleAddSymptom}
-                  className="text-[#31694E] hover:text-[#27543e] text-sm font-semibold"
+                  className="flex items-center gap-2 px-4 py-2 bg-[#31694E] text-white rounded-lg hover:bg-[#27543e] transition-colors text-sm font-semibold"
                 >
-                  + Add Symptom
+                  <FaPlus /> Add Symptom
                 </button>
               </div>
 
@@ -460,6 +482,65 @@ const VitalSigns = () => {
           </div>
         )}
       </div>
+
+      {/* Symptom Input Modal */}
+      {showSymptomModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleCancelSymptom}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-fadeIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <FaHeartbeat className="text-[#31694E]" /> Add Symptom
+              </h3>
+              <button
+                onClick={handleCancelSymptom}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                type="button"
+              >
+                <FaTimes className="text-xl" />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-semibold mb-2">
+                Enter symptom:
+              </label>
+              <input
+                type="text"
+                value={symptomInput}
+                onChange={(e) => setSymptomInput(e.target.value)}
+                onKeyDown={handleSymptomKeyPress}
+                placeholder="e.g., Headache, Fever, Nausea..."
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:border-[#31694E] outline-none transition-colors"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelSymptom}
+                className="px-6 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold"
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSymptom}
+                disabled={!symptomInput || !symptomInput.trim()}
+                className="px-6 py-2 bg-[#31694E] text-white rounded-lg hover:bg-[#27543e] transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#31694E]"
+                type="button"
+              >
+                Add Symptom
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
