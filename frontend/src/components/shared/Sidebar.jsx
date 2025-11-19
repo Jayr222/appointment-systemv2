@@ -29,6 +29,7 @@ const Sidebar = () => {
   const doctorLinks = [
     { path: '/doctor/dashboard', label: 'Dashboard', icon: FaTachometerAlt },
     { path: '/doctor/appointments', label: 'Appointments', icon: FaCalendarAlt },
+    { path: '/doctor/medical-records', label: 'Patient Records', icon: FaClipboardList },
     { path: '/doctor/patient-documents', label: 'Patient Documents', icon: FaFolder },
     { path: '/doctor/schedule', label: 'Schedule', icon: FaClock },
     { path: '/doctor/messages', label: 'Messages', icon: FaEnvelope },
