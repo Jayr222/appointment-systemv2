@@ -45,9 +45,15 @@ export const uploadToStorage = async (fileBuffer, filename, mimeType, folder = '
   }
 
   try {
+    console.log('📦 Getting GridFS bucket...');
     const bucket = getGridFSBucket();
     const fileId = new mongoose.Types.ObjectId();
     const uploadFilename = `${folder}/${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(filename)}`;
+    console.log('📤 Opening GridFS upload stream...');
+    console.log('   File ID:', fileId.toString());
+    console.log('   Upload filename:', uploadFilename);
+    console.log('   Content type:', mimeType);
+    console.log('   Buffer size:', fileBuffer.length);
     
     return new Promise((resolve, reject) => {
       const uploadStream = bucket.openUploadStreamWithId(fileId, uploadFilename, {
@@ -62,6 +68,7 @@ export const uploadToStorage = async (fileBuffer, filename, mimeType, folder = '
       uploadStream.on('finish', () => {
         // Return a URL that can be used to retrieve the file
         const url = `/api/storage/avatars/${fileId.toString()}`;
+        console.log('✅ GridFS upload finished:', url);
         resolve({
           url: url,
           fileId: fileId.toString(),
@@ -70,18 +77,27 @@ export const uploadToStorage = async (fileBuffer, filename, mimeType, folder = '
       });
 
       uploadStream.on('error', (error) => {
-        console.error('GridFS upload error:', error);
+        console.error('❌ GridFS upload stream error:', error);
+        console.error('   Error message:', error.message);
+        console.error('   Error stack:', error.stack);
         reject(error);
       });
 
+      console.log('📝 Writing buffer to GridFS stream...');
       uploadStream.end(fileBuffer);
+      console.log('✅ Buffer written to stream, waiting for finish event...');
     });
   } catch (error) {
-    console.error('Storage upload error:', error);
+    console.error('❌ Storage upload error:', error);
+    console.error('   Error message:', error.message);
+    console.error('   Error stack:', error.stack);
     // Fallback to base64 in database on error
+    console.log('⚠️ Falling back to base64 storage in database...');
     const base64 = fileBuffer.toString('base64');
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+    console.log('✅ Base64 conversion complete, length:', dataUrl.length);
     return {
-      url: `data:${mimeType};base64,${base64}`,
+      url: dataUrl,
       storageType: STORAGE_TYPES.DATABASE,
       error: error.message
     };

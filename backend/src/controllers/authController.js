@@ -3,6 +3,7 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import path from 'path';
 import fs from 'fs/promises';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { generateToken } from '../utils/generateToken.js';
 import { logActivity, logError } from '../services/loggingService.js';
@@ -10,6 +11,7 @@ import { noteFailedLogin, resetLoginAttempts } from '../middleware/rateLimiter.j
 import { sendPasswordResetEmail } from '../services/emailService.js';
 import { AVATARS_DIR, ensureAvatarUploadDirExists } from '../services/avatarService.js';
 import { uploadToStorage, deleteFromStorage, getStorageTypeFromUrl } from '../services/storageService.js';
+import connectDB from '../config/db.js';
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -321,11 +323,27 @@ export const uploadAvatar = async (req, res) => {
       }
     }
 
+    // Ensure database is connected before uploading to GridFS
+    if (mongoose.connection.readyState !== 1) {
+      console.log('⚠️ Database not connected, attempting to connect...');
+      console.log('   Connection state:', mongoose.connection.readyState);
+      await connectDB();
+      console.log('✅ Database connection ensured, state:', mongoose.connection.readyState);
+    } else {
+      console.log('✅ Database already connected, state:', mongoose.connection.readyState);
+    }
+    
     // Upload to cloud storage (or use local/filesystem)
     const mimeType = req.file.mimetype || 'image/jpeg';
     const filename = req.file.originalname || `avatar-${Date.now()}.jpg`;
+    console.log('📤 Starting avatar upload to storage...');
+    console.log('   File size:', fileBuffer.length);
+    console.log('   MIME type:', mimeType);
+    console.log('   Filename:', filename);
+    
     const uploadResult = await uploadToStorage(fileBuffer, filename, mimeType, 'avatars');
-
+    console.log('📥 Upload result received:', uploadResult ? 'Success' : 'Null (using local)');
+    
     let avatarValue;
     let avatarUrl;
 
@@ -334,6 +352,7 @@ export const uploadAvatar = async (req, res) => {
       avatarValue = uploadResult.url;
       avatarUrl = uploadResult.url;
       console.log(`✅ Avatar uploaded to ${uploadResult.storageType || 'cloud storage'}: ${avatarUrl}`);
+      console.log('   File ID:', uploadResult.fileId);
     } else {
       // Local filesystem storage
       const fileExt = req.file.originalname ? path.extname(req.file.originalname) : '.jpg';
@@ -343,21 +362,31 @@ export const uploadAvatar = async (req, res) => {
     }
 
     // Update user with new avatar
+    console.log('💾 Saving avatar to user record...');
+    console.log('   Avatar value:', avatarValue);
     user.avatar = avatarValue;
     await user.save();
+    console.log('✅ User record updated with new avatar');
 
     // Log activity
-    await logActivity(user._id, 'upload_avatar', 'auth', 'Avatar uploaded');
+    try {
+      await logActivity(user._id, 'upload_avatar', 'auth', 'Avatar uploaded');
+    } catch (error) {
+      console.error('⚠️ Failed to log activity (non-critical):', error.message);
+    }
 
     // Update user object in response (remove password)
     const userResponse = user.toObject();
     delete userResponse.password;
 
+    console.log('📤 Sending response to client...');
+    console.log('   Response avatar:', userResponse.avatar);
     res.json({
       success: true,
       avatar: avatarUrl,
       user: userResponse
     });
+    console.log('✅ Avatar upload response sent successfully');
   } catch (error) {
     console.error('Upload avatar error:', error);
     console.error('Error details:', {

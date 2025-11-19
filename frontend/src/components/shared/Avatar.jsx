@@ -1,6 +1,6 @@
 import React from 'react';
 import { FaUser } from 'react-icons/fa';
-import { API_URL } from '../../utils/constants';
+import { API_URL, API_BASE_URL } from '../../utils/constants';
 
 const Avatar = ({ user, size = 'md', className = '', showName = false }) => {
   const sizeClasses = {
@@ -28,25 +28,37 @@ const Avatar = ({ user, size = 'md', className = '', showName = false }) => {
       return user.avatar;
     }
     
-    // If it's a GridFS URL (MongoDB storage)
+    // If it's a GridFS URL (MongoDB storage) - /api/storage/avatars/:fileId
     if (user.avatar.startsWith('/api/storage/')) {
       const isProduction = import.meta.env.PROD;
       if (isProduction && API_URL) {
-        return `${API_URL}${user.avatar}`;
+        // Production with separate backend - API_URL is the base backend URL (without /api)
+        // Avatar path is /api/storage/avatars/:fileId, so prepend the base URL
+        const fullUrl = `${API_URL}${user.avatar}`;
+        console.log('🖼️ Constructed GridFS avatar URL:', fullUrl);
+        return fullUrl;
       }
+      // Use API_BASE_URL if available (includes /api)
+      if (API_BASE_URL && API_BASE_URL !== '/api') {
+        // API_BASE_URL is like https://backend.com/api, avatar path is /api/storage/...
+        // So we need to replace /api with the base
+        const baseWithoutApi = API_BASE_URL.replace('/api', '');
+        return `${baseWithoutApi}${user.avatar}`;
+      }
+      // Development or same domain - use relative path
       return user.avatar;
     }
     
-    // Legacy local filesystem paths
-    // In production, if API_URL is set, use it (backend on different domain)
-    // In development, use relative path (proxy handles it)
+    // Legacy local filesystem paths - /uploads/avatars/:filename
     const isProduction = import.meta.env.PROD;
     
     if (isProduction && API_URL) {
       // Production with separate backend - use full backend URL
+      // API_URL is the base backend URL (without /api)
       if (user.avatar.startsWith('/uploads/')) {
         return `${API_URL}${user.avatar}`;
       }
+      // Just filename, construct full path
       return `${API_URL}/uploads/avatars/${user.avatar}`;
     }
     
@@ -62,6 +74,19 @@ const Avatar = ({ user, size = 'md', className = '', showName = false }) => {
 
   const [imageError, setImageError] = React.useState(false);
 
+  // Debug logging in development
+  React.useEffect(() => {
+    if (import.meta.env.DEV && user?.avatar) {
+      console.log('🖼️ Avatar component:', {
+        avatar: user.avatar,
+        constructedUrl: avatarUrl,
+        apiUrl: API_URL,
+        apiBaseUrl: API_BASE_URL,
+        isProduction: import.meta.env.PROD
+      });
+    }
+  }, [user?.avatar, avatarUrl]);
+
   return (
     <div className={`relative ${className}`}>
       <div className={`${sizeClass} rounded-full flex items-center justify-center overflow-hidden bg-blue-500 text-white relative`}>
@@ -70,8 +95,15 @@ const Avatar = ({ user, size = 'md', className = '', showName = false }) => {
             src={avatarUrl}
             alt={user?.name || 'Avatar'}
             className="w-full h-full object-cover"
-            onError={() => {
+            onError={(e) => {
               // Fallback to initials if image fails to load
+              console.error('❌ Avatar image failed to load:', {
+                avatar: user?.avatar,
+                constructedUrl: avatarUrl,
+                error: e,
+                apiUrl: API_URL,
+                apiBaseUrl: API_BASE_URL
+              });
               setImageError(true);
             }}
           />
