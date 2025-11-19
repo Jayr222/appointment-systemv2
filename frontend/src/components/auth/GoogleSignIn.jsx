@@ -3,7 +3,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { FaGoogle } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
-import { GOOGLE_CLIENT_ID, API_BASE_URL, API_URL } from '../../utils/constants';
+import { GOOGLE_CLIENT_ID, API_BASE_URL } from '../../utils/constants';
 
 const GoogleSignIn = () => {
   const navigate = useNavigate();
@@ -11,7 +11,8 @@ const GoogleSignIn = () => {
 
   const handleSuccess = async (credentialResponse) => {
     try {
-      const response = await fetch(`${API_URL}${API_BASE_URL}/auth/google/verify`, {
+      // Use API_BASE_URL which already includes /api
+      const response = await fetch(`${API_BASE_URL}/auth/google/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

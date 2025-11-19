@@ -43,7 +43,40 @@ const io = new Server(httpServer, {
 app.set('io', io);
 
 // Middleware
-app.use(cors());
+// CORS configuration - allow frontend domain
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      config.FRONTEND_URL,
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:5174'
+    ];
+    
+    // If FRONTEND_URL is set, add it to allowed origins
+    if (config.FRONTEND_URL && !allowedOrigins.includes(config.FRONTEND_URL)) {
+      allowedOrigins.push(config.FRONTEND_URL);
+    }
+    
+    // Also allow Vercel preview URLs (they match *.vercel.app pattern)
+    const isVercelPreview = origin.includes('.vercel.app');
+    
+    if (allowedOrigins.includes(origin) || isVercelPreview) {
+      callback(null, true);
+    } else {
+      console.warn('⚠️  CORS: Origin not allowed:', origin);
+      callback(null, true); // Allow all for now, but log warning
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -1,4 +1,4 @@
-import { API_BASE_URL, API_URL } from '../utils/constants';
+import { API_BASE_URL } from '../utils/constants';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
@@ -12,7 +12,7 @@ const siteContentService = {
   // Get site content (public)
   getSiteContent: async () => {
     try {
-      const response = await fetch(`${API_URL}${API_BASE_URL}/site-content`, {
+      const response = await fetch(`${API_BASE_URL}/site-content`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -34,7 +34,7 @@ const siteContentService = {
   // Update site content (admin only)
   updateSiteContent: async (content) => {
     try {
-      const response = await fetch(`${API_URL}${API_BASE_URL}/site-content`, {
+      const response = await fetch(`${API_BASE_URL}/site-content`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(content)
@@ -56,7 +56,7 @@ const siteContentService = {
   // Reset site content to defaults (admin only)
   resetSiteContent: async () => {
     try {
-      const response = await fetch(`${API_URL}${API_BASE_URL}/site-content/reset`, {
+      const response = await fetch(`${API_BASE_URL}/site-content/reset`, {
         method: 'POST',
         headers: getAuthHeaders()
       });
