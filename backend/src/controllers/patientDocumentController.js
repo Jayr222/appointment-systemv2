@@ -1,7 +1,7 @@
 import PatientDocument from '../models/PatientDocument.js';
 import User from '../models/User.js';
 import Appointment from '../models/Appointment.js';
-import { upload } from '../services/documentService.js';
+import { upload, useCloudinary } from '../services/documentService.js';
 import { deleteFile } from '../services/documentService.js';
 import { logActivity } from '../services/loggingService.js';
 import path from 'path';
@@ -156,11 +156,25 @@ export const uploadPatientDocument = async (req, res) => {
       parsedDiagnosisDate = parsed;
     }
 
+    // Handle both local and Cloudinary file storage
+    const fileName = useCloudinary 
+      ? req.file.filename || req.file.public_id || `cloudinary-${Date.now()}`
+      : req.file.filename;
+    
+    const filePath = useCloudinary 
+      ? req.file.path // Cloudinary URL
+      : req.file.path; // Local path
+    
+    const cloudinaryPublicId = useCloudinary && req.file.public_id 
+      ? req.file.public_id 
+      : undefined;
+
     const document = new PatientDocument({
       patient: patientId,
-      fileName: req.file.filename,
+      fileName: fileName,
       originalFileName: req.file.originalname,
-      filePath: req.file.path,
+      filePath: filePath,
+      cloudinaryPublicId: cloudinaryPublicId,
       documentType,
       uploadedBy: req.user.id,
       fileSize: req.file.size,
@@ -300,16 +314,22 @@ export const deletePatientDocument = async (req, res) => {
       return res.status(403).json({ message: 'You are not authorized to delete this document' });
     }
 
-    // Delete file from filesystem
-    let fullPath;
-    if (document.filePath) {
-      fullPath = path.isAbsolute(document.filePath)
-        ? document.filePath
-        : path.join(__dirname, '../../', document.filePath);
+    // Delete file from storage (local or Cloudinary)
+    if (useCloudinary && document.cloudinaryPublicId) {
+      // Delete from Cloudinary
+      await deleteFile(document.filePath, document.cloudinaryPublicId);
     } else {
-      fullPath = path.join(__dirname, '../../uploads', document.fileName);
+      // Delete from local filesystem
+      let fullPath;
+      if (document.filePath) {
+        fullPath = path.isAbsolute(document.filePath)
+          ? document.filePath
+          : path.join(__dirname, '../../', document.filePath);
+      } else {
+        fullPath = path.join(__dirname, '../../uploads', document.fileName);
+      }
+      await deleteFile(fullPath);
     }
-    await deleteFile(fullPath);
 
     // Delete document record
     await PatientDocument.findByIdAndDelete(req.params.id);

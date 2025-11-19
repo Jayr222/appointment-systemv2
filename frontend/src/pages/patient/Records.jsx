@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   FaHeartbeat, FaHospital, FaStethoscope, FaNotesMedical, 
-  FaSearch, FaPills, FaFlask, FaCalendarAlt, FaDownload, FaPrint 
+  FaSearch, FaPills, FaFlask, FaCalendarAlt, FaDownload, FaPrint, FaCalendarPlus 
 } from 'react-icons/fa';
 import patientService from '../../services/patientService';
 
@@ -501,14 +502,29 @@ const Records = () => {
                     <FaCalendarAlt className="mr-2 text-primary-500" /> Follow-up
                   </h3>
                   <div className="bg-yellow-50 p-4 rounded border border-yellow-200">
-                    {selectedRecord.followUpDate && (
-                      <p className="font-bold text-gray-800 mb-2">
-                        Follow-up Date: {new Date(selectedRecord.followUpDate).toLocaleDateString()}
-                      </p>
-                    )}
-                    {selectedRecord.followUpInstructions && (
-                      <p className="text-gray-700">{selectedRecord.followUpInstructions}</p>
-                    )}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        {selectedRecord.followUpDate && (
+                          <p className="font-bold text-gray-800 mb-2">
+                            Follow-up Date: {new Date(selectedRecord.followUpDate).toLocaleDateString()}
+                          </p>
+                        )}
+                        {selectedRecord.followUpInstructions && (
+                          <p className="text-gray-700">{selectedRecord.followUpInstructions}</p>
+                        )}
+                      </div>
+                      
+                      {/* Book Follow-up Button */}
+                      {selectedRecord.followUpDate && selectedRecord.doctor && (
+                        <Link
+                          to={`/patient/book-appointment?doctor=${selectedRecord.doctor._id}&date=${new Date(selectedRecord.followUpDate).toISOString().split('T')[0]}`}
+                          className="ml-4 inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition shadow-sm whitespace-nowrap"
+                        >
+                          <FaCalendarPlus />
+                          Book Follow-up
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

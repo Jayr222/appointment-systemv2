@@ -18,6 +18,10 @@ const patientDocumentSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  cloudinaryPublicId: {
+    type: String,
+    default: null
+  },
   documentType: {
     type: String,
     required: true,

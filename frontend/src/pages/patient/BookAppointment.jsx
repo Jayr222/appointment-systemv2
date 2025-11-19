@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import patientService from '../../services/patientService';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { FaExclamationTriangle, FaInfoCircle, FaChevronDown, FaChevronUp, FaEdit, FaCheckCircle, FaTimes } from 'react-icons/fa';
 import { useNotifications } from '../../context/NotificationContext';
 
@@ -70,8 +70,10 @@ const BookAppointment = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSlotUnavailable, setSelectedSlotUnavailable] = useState(false);
   const [checkingSlotAvailability, setCheckingSlotAvailability] = useState(false);
+  const [isFollowUp, setIsFollowUp] = useState(false);
   const navigate = useNavigate();
   const { addNotification } = useNotifications();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -86,9 +88,35 @@ const BookAppointment = () => {
     fetchDoctors();
     fetchMedicalHistory();
     
-    // Fetch available slots if form data is restored
-    if (formData.doctor && formData.appointmentDate) {
-      fetchAvailableSlots(formData.doctor, formData.appointmentDate);
+    // Check for follow-up URL parameters
+    const doctorParam = searchParams.get('doctor');
+    const dateParam = searchParams.get('date');
+    
+    if (doctorParam && dateParam) {
+      // Pre-fill form with follow-up data
+      setIsFollowUp(true);
+      setFormData(prev => ({
+        ...prev,
+        doctor: doctorParam,
+        appointmentDate: dateParam,
+        reason: prev.reason || 'Follow-up appointment'
+      }));
+      
+      // Fetch available slots for this doctor and date
+      fetchAvailableSlots(doctorParam, dateParam);
+      
+      // Show notification
+      addNotification({
+        type: 'info',
+        title: 'Follow-up Appointment',
+        message: 'Pre-filling form with your recommended follow-up date and doctor.',
+        showBrowserNotification: false
+      });
+    } else {
+      // Fetch available slots if form data is restored from localStorage
+      if (formData.doctor && formData.appointmentDate) {
+        fetchAvailableSlots(formData.doctor, formData.appointmentDate);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -404,7 +432,29 @@ const BookAppointment = () => {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">Book Appointment</h1>
+      <div className="flex items-center gap-3 mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Book Appointment</h1>
+        {isFollowUp && (
+          <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-semibold rounded-full border border-yellow-300">
+            Follow-up
+          </span>
+        )}
+      </div>
+
+      {isFollowUp && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start">
+            <FaInfoCircle className="text-blue-500 mt-1 mr-3 flex-shrink-0" />
+            <div>
+              <h3 className="font-semibold text-blue-900 mb-1">Follow-up Appointment</h3>
+              <p className="text-blue-800 text-sm">
+                This form has been pre-filled with your recommended follow-up date and doctor. 
+                You can adjust the time slot and other details as needed.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-md p-6">
         {error && (
