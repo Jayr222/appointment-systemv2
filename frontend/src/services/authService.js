@@ -119,8 +119,14 @@ export const authService = {
   },
 
   resetPassword: async (token, password) => {
-    // URL encode the token to handle any special characters properly
+    // Hex tokens are URL-safe, but encode to handle edge cases
+    // Note: decodeURIComponent on backend will handle it correctly
     const encodedToken = encodeURIComponent(token);
+    console.log('📤 Sending reset password request:', {
+      originalTokenLength: token?.length,
+      encodedTokenLength: encodedToken?.length,
+      tokensMatch: token === encodedToken // Should be true for hex strings
+    });
     const response = await api.put(`/auth/reset-password/${encodedToken}`, { password });
     return response.data;
   },

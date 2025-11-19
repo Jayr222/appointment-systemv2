@@ -489,12 +489,22 @@ export const resetPassword = async (req, res) => {
   try {
     // Decode the token from URL (it may be URL-encoded)
     let { token } = req.params;
+    const originalToken = token;
+    
     try {
+      // Try decoding - if it's already decoded, this will just return the same value
       token = decodeURIComponent(token);
     } catch (e) {
       // If decoding fails, use token as-is
       console.log('Token decode warning:', e.message);
     }
+    
+    console.log('🔐 Reset password request:', {
+      originalTokenLength: originalToken?.length,
+      decodedTokenLength: token?.length,
+      tokenPreview: token?.substring(0, 20) + '...',
+      hasPassword: !!req.body?.password
+    });
     
     const { password } = req.body;
 
@@ -503,6 +513,7 @@ export const resetPassword = async (req, res) => {
     }
 
     if (!token) {
+      console.log('❌ No token provided');
       return res.status(400).json({ message: 'Reset token is required' });
     }
 
@@ -512,6 +523,8 @@ export const resetPassword = async (req, res) => {
       .update(token)
       .digest('hex');
 
+    console.log('🔍 Searching for user with token hash:', resetPasswordToken.substring(0, 20) + '...');
+
     // Find user with valid token
     const user = await User.findOne({
       resetPasswordToken,
@@ -520,13 +533,7 @@ export const resetPassword = async (req, res) => {
     });
 
     if (!user) {
-      // Log for debugging (don't expose to user)
-      console.log('Reset password attempt failed:', {
-        tokenLength: token?.length,
-        tokenHash: resetPasswordToken.substring(0, 10) + '...',
-        hasExpireCheck: true,
-        currentTime: Date.now()
-      });
+      console.log('❌ No user found with valid token');
       
       // Check if token exists but expired
       const expiredUser = await User.findOne({
@@ -535,11 +542,33 @@ export const resetPassword = async (req, res) => {
       });
       
       if (expiredUser) {
+        console.log('⏰ Token found but expired');
+        const timeRemaining = expiredUser.resetPasswordExpire - Date.now();
+        console.log('   Expired by:', Math.round(timeRemaining / 1000 / 60), 'minutes');
         return res.status(400).json({ message: 'Reset token has expired. Please request a new password reset link.' });
+      }
+      
+      // Check if any user has this token hash (for debugging)
+      const anyUserWithToken = await User.findOne({
+        resetPasswordToken,
+        isDeleted: { $ne: true }
+      }).select('email resetPasswordExpire');
+      
+      if (anyUserWithToken) {
+        console.log('⚠️ Found user with token but expired:', {
+          email: anyUserWithToken.email,
+          expireTime: anyUserWithToken.resetPasswordExpire,
+          currentTime: Date.now(),
+          expired: anyUserWithToken.resetPasswordExpire <= Date.now()
+        });
+      } else {
+        console.log('❌ No user found with this token hash at all');
       }
       
       return res.status(400).json({ message: 'Invalid or expired reset token' });
     }
+    
+    console.log('✅ User found, resetting password for:', user.email);
 
     // Set new password
     user.password = password;
