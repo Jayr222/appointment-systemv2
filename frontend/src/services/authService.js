@@ -32,17 +32,23 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const requestUrl = error.config?.url || '';
       const method = error.config?.method?.toLowerCase();
+      const currentPath = window.location.pathname;
 
       const skipAutoLogout =
         requestUrl.includes('/auth/me') ||
         (method === 'get' && requestUrl.startsWith('/patient/'));
 
-      if (!skipAutoLogout) {
+      // Don't redirect if user is on public auth pages (login, register, forgot-password, reset-password)
+      const isPublicAuthPage = 
+        currentPath === '/login' || 
+        currentPath === '/register' || 
+        currentPath === '/forgot-password' || 
+        currentPath === '/reset-password';
+
+      if (!skipAutoLogout && !isPublicAuthPage) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-          window.location.href = '/login';
-        }
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
