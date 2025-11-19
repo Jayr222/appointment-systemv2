@@ -20,12 +20,43 @@ import doctorAvailabilityRoutes from './routes/doctorAvailabilityRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import { getFileFromStorage } from './services/storageService.js';
 
-// Connect to database and ensure default admin exists
-await connectDB();
-await ensureDefaultAdmin();
-
-// Initialize app
+// Initialize app first (before database connection)
+// This allows the app to be exported even if DB connection fails
 const app = express();
+
+// Lazy database connection - will connect on first request
+let dbInitialized = false;
+const initializeDB = async () => {
+  if (dbInitialized) return;
+  
+  try {
+    await connectDB();
+    await ensureDefaultAdmin();
+    dbInitialized = true;
+    console.log('✅ Database initialized successfully');
+  } catch (error) {
+    console.error('❌ Database initialization failed:', error.message);
+    // Don't crash - app can still handle requests that don't need DB
+    // But log the error for debugging
+  }
+};
+
+// Middleware to ensure DB is connected before handling requests that need it
+const ensureDB = async (req, res, next) => {
+  try {
+    await initializeDB();
+    next();
+  } catch (error) {
+    console.error('Database connection error:', error);
+    if (!res.headersSent) {
+      res.status(503).json({
+        success: false,
+        message: 'Database connection unavailable',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+};
 
 // Create HTTP server
 const httpServer = createServer(app);
@@ -208,6 +239,17 @@ if (process.env.VERCEL) {
 }
 
 // Routes
+// Apply DB middleware to all routes except health check and test endpoints
+app.use((req, res, next) => {
+  // Skip DB check for health endpoint and test endpoints
+  const path = req.path || req.url?.split('?')[0] || '';
+  if (path === '/health' || path === '/api/test' || path === '/api/auth/test') {
+    return next();
+  }
+  // Ensure DB is connected for all other routes
+  ensureDB(req, res, next);
+});
+
 console.log('🚀 Registering /api/auth routes...');
 app.use('/api/auth', authRoutes);
 console.log('✅ /api/auth routes registered');
