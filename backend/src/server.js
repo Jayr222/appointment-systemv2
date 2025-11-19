@@ -58,20 +58,79 @@ const ensureDB = async (req, res, next) => {
   }
 };
 
-// Create HTTP server
-const httpServer = createServer(app);
+// Create HTTP server (only needed for Socket.IO or non-serverless)
+let httpServer = null;
+let io = null;
 
-// Initialize Socket.IO
-const io = new Server(httpServer, {
-  cors: {
-    origin: config.FRONTEND_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
-});
-
-// Store io instance for use in routes
-app.set('io', io);
+// Initialize Socket.IO (skip in serverless environments like Vercel)
+// Socket.IO requires persistent connections which don't work with serverless
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  httpServer = createServer(app);
+  
+  // Initialize Socket.IO
+  io = new Server(httpServer, {
+    cors: {
+      origin: config.FRONTEND_URL || 'http://localhost:5173',
+      methods: ['GET', 'POST'],
+      credentials: true
+    }
+  });
+  
+  // Store io instance for use in routes
+  app.set('io', io);
+  
+  // Initialize socket emitter
+  setIO(io);
+  
+  // Socket.IO connection handling
+  io.on('connection', (socket) => {
+    console.log(`Client connected: ${socket.id}`);
+    
+    // Join user-specific room for messaging
+    socket.on('join-user', (data) => {
+      const { userId } = data;
+      if (userId) {
+        socket.join(`user-${userId}`);
+        console.log(`User ${userId} joined user room`);
+      }
+    });
+    
+    // Join queue room
+    socket.on('join-queue', (data) => {
+      const { role, userId, doctorId } = data;
+      
+      // Join based on role
+      if (role === 'admin') {
+        socket.join('admin-queue');
+        console.log(`Admin ${userId} joined queue room`);
+      } else if (role === 'doctor') {
+        socket.join(`doctor-${doctorId || userId}-queue`);
+        socket.join('doctor-queue'); // Also join general doctor room
+        console.log(`Doctor ${userId} joined queue room`);
+      } else if (role === 'patient') {
+        socket.join(`patient-${userId}-queue`);
+        socket.join('patient-queue'); // Also join general patient room
+        console.log(`Patient ${userId} joined queue room`);
+      }
+    });
+    
+    // Leave queue room
+    socket.on('leave-queue', () => {
+      socket.leave('admin-queue');
+      socket.leave('doctor-queue');
+      socket.leave('patient-queue');
+      console.log(`Client ${socket.id} left queue rooms`);
+    });
+    
+    socket.on('disconnect', () => {
+      console.log(`Client disconnected: ${socket.id}`);
+    });
+  });
+} else {
+  // In serverless: set io to null so code doesn't crash when checking for it
+  app.set('io', null);
+  console.log('Socket.IO disabled in serverless environment');
+}
 
 // Middleware
 // CORS configuration - allow frontend domain
@@ -378,60 +437,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Initialize socket emitter
-setIO(io);
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
-
-  // Join user-specific room for messaging
-  socket.on('join-user', (data) => {
-    const { userId } = data;
-    if (userId) {
-      socket.join(`user-${userId}`);
-      console.log(`User ${userId} joined user room`);
-    }
-  });
-
-  // Join queue room
-  socket.on('join-queue', (data) => {
-    const { role, userId, doctorId } = data;
-    
-    // Join based on role
-    if (role === 'admin') {
-      socket.join('admin-queue');
-      console.log(`Admin ${userId} joined queue room`);
-    } else if (role === 'doctor') {
-      socket.join(`doctor-${doctorId || userId}-queue`);
-      socket.join('doctor-queue'); // Also join general doctor room
-      console.log(`Doctor ${userId} joined queue room`);
-    } else if (role === 'patient') {
-      socket.join(`patient-${userId}-queue`);
-      socket.join('patient-queue'); // Also join general patient room
-      console.log(`Patient ${userId} joined queue room`);
-    }
-  });
-
-  // Leave queue room
-  socket.on('leave-queue', () => {
-    socket.leave('admin-queue');
-    socket.leave('doctor-queue');
-    socket.leave('patient-queue');
-    console.log(`Client ${socket.id} left queue rooms`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
-  });
-});
-
-// Export io for use in controllers
+// Export io for use in controllers (null in serverless environments)
 export { io };
 
 // Start server (avoid starting a listener on serverless platforms like Vercel)
 const PORT = config.PORT;
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && httpServer) {
   httpServer.listen(PORT, () => {
     console.log(`Server running in ${config.NODE_ENV} mode on port ${PORT}`);
     console.log(`Socket.IO server initialized`);
