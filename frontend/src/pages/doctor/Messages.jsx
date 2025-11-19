@@ -25,14 +25,29 @@ const Messages = () => {
     fetchUnreadCount();
 
     // Initialize Socket.IO connection
-    socketRef.current = io(API_URL);
+    // Note: Socket.IO is disabled in serverless environments (Vercel), so connection may fail silently
+    socketRef.current = io(API_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: false // Disable auto-reconnect in serverless environments
+    });
     
-    // Join user room for real-time messages
-    if (user) {
-      socketRef.current.emit('join-user', { userId: user.id });
-    }
+    // Handle connection errors silently (expected in serverless environments like Vercel)
+    socketRef.current.on('connect_error', (error) => {
+      // Only log in development, suppress in production/serverless environments
+      if (import.meta.env.DEV) {
+        console.debug('Socket.IO not available (expected in serverless):', error.message);
+      }
+      // Messages will work via HTTP polling instead
+    });
+    
+    // Join user room for real-time messages (if connected)
+    socketRef.current.on('connect', () => {
+      if (user) {
+        socketRef.current.emit('join-user', { userId: user.id });
+      }
+    });
 
-    // Listen for new messages
+    // Listen for new messages (only works if Socket.IO is connected)
     socketRef.current.on('new-message', (data) => {
       if (selectedConversation && data.message.receiver === user.id) {
         fetchConversation(selectedConversation.partner._id);

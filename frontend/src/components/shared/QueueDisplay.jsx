@@ -58,7 +58,10 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
     });
 
     newSocket.on('connect', () => {
-      console.log('Socket connected');
+      // Only log in development
+      if (import.meta.env.DEV) {
+        console.log('Socket connected');
+      }
       // Join queue room based on user role
       if (user && user.role) {
         newSocket.emit('join-queue', {
@@ -70,13 +73,19 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
     });
 
     newSocket.on('disconnect', () => {
-      console.log('Socket disconnected');
+      // Silently handle disconnect (expected in serverless environments)
+      // console.log('Socket disconnected');
     });
 
-    // Handle connection errors
+    // Handle connection errors silently (expected in serverless environments like Vercel)
+    // Socket.IO is disabled on serverless backends, so connection failures are normal
     newSocket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+      // Only log in development, suppress in production/serverless environments
+      if (import.meta.env.DEV) {
+        console.debug('Socket.IO not available (expected in serverless):', error.message);
+      }
       setLoading(false);
+      // App will fall back to polling via HTTP requests
     });
 
     // Listen for queue updates

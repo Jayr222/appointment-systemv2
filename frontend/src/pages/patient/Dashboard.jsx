@@ -119,9 +119,14 @@ const Dashboard = () => {
     });
 
     socket.on('connect', () => {
-      console.log('Socket connected for appointment notifications');
+      // Only log in development
+      if (import.meta.env.DEV) {
+        console.log('Socket connected for appointment notifications');
+      }
       const userId = user?.id || user?._id;
-      console.log('Joining queue room with userId:', userId);
+      if (import.meta.env.DEV) {
+        console.log('Joining queue room with userId:', userId);
+      }
       // Join patient room to receive notifications
       socket.emit('join-queue', {
         role: user.role,
@@ -277,8 +282,14 @@ const Dashboard = () => {
       }
     });
 
+    // Handle connection errors silently (expected in serverless environments like Vercel)
+    // Socket.IO is disabled on serverless backends, so connection failures are normal
     socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+      // Only log in development, suppress in production/serverless environments
+      if (import.meta.env.DEV) {
+        console.debug('Socket.IO not available (expected in serverless):', error.message);
+      }
+      // App will fall back to polling via HTTP requests
     });
 
     return () => {
