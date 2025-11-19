@@ -78,14 +78,46 @@ doctorAvailabilitySchema.statics.isDoctorUnavailableAtTime = async function(doct
     return true;
   }
   
+  // Helper to parse time to minutes for accurate comparison
+  const parseTimeToMinutes = (timeStr) => {
+    if (!timeStr) return null;
+    const time = timeStr.trim().toUpperCase();
+    
+    // Handle 12-hour format
+    const match = time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/);
+    if (match) {
+      let hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      const period = match[3];
+      if (period === 'PM' && hour !== 12) hour += 12;
+      else if (period === 'AM' && hour === 12) hour = 0;
+      return hour * 60 + minute;
+    }
+    
+    // Handle 24-hour format
+    const match24 = time.match(/(\d{1,2}):(\d{2})/);
+    if (match24) {
+      const hour = parseInt(match24[1]);
+      const minute = parseInt(match24[2]);
+      return hour * 60 + minute;
+    }
+    
+    return null;
+  };
+  
   // Check if the time falls within any unavailable time slot
-  const timeHour = parseTimeToHour(time);
-  if (timeHour === null) return true; // If can't parse, assume unavailable
+  const timeMinutes = parseTimeToMinutes(time);
+  if (timeMinutes === null) return true; // If can't parse, assume unavailable
   
   return unavailability.unavailableTimes.some(slot => {
-    const slotStart = parseTimeToHour(slot.startTime);
-    const slotEnd = parseTimeToHour(slot.endTime);
-    return timeHour >= slotStart && timeHour < slotEnd;
+    const slotStartMinutes = parseTimeToMinutes(slot.startTime);
+    const slotEndMinutes = parseTimeToMinutes(slot.endTime);
+    
+    if (slotStartMinutes === null || slotEndMinutes === null) return false;
+    
+    // Check if appointment time falls within unavailable range
+    // Appointment slots are 30 minutes, so check if start time is in range
+    return timeMinutes >= slotStartMinutes && timeMinutes < slotEndMinutes;
   });
 };
 

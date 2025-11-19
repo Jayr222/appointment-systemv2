@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import messageService from '../../services/messageService';
 import { useAuth } from '../../context/AuthContext';
-import { FaPaperPlane, FaUser, FaEnvelope, FaEnvelopeOpen } from 'react-icons/fa';
+import { FaPaperPlane, FaUser, FaEnvelope, FaEnvelopeOpen, FaSearch } from 'react-icons/fa';
 import Avatar from '../../components/shared/Avatar';
 import io from 'socket.io-client';
 import { API_URL } from '../../utils/constants';
@@ -16,6 +16,7 @@ const Messages = () => {
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
 
@@ -141,6 +142,18 @@ const Messages = () => {
     }
   };
 
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return conversations;
+    }
+    const query = searchQuery.toLowerCase();
+    return conversations.filter((conversation) => 
+      conversation.partner?.name?.toLowerCase().includes(query) ||
+      conversation.partner?.email?.toLowerCase().includes(query) ||
+      conversation.lastMessage?.content?.toLowerCase().includes(query)
+    );
+  }, [conversations, searchQuery]);
+
   const formatDate = (date) => {
     const d = new Date(date);
     const now = new Date();
@@ -245,20 +258,39 @@ const Messages = () => {
         {/* Conversations List */}
         <div className="lg:col-span-1 bg-white rounded-lg shadow-md">
           <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold">Conversations</h2>
-            {unreadCount > 0 && (
-              <span className="ml-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
-                {unreadCount}
-              </span>
-            )}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold">Conversations</h2>
+              {unreadCount > 0 && (
+                <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FaSearch className="text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search conversations..."
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
           </div>
           <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
             {loading ? (
               <div className="p-4 text-center text-gray-500">Loading...</div>
             ) : conversations.length === 0 ? (
               <div className="p-4 text-center text-gray-500">No conversations yet</div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="p-4 text-center text-gray-500">
+                <FaSearch className="text-3xl mx-auto mb-2 text-gray-400" />
+                <p>No conversations match your search</p>
+              </div>
             ) : (
-              conversations.map((conversation) => (
+              filteredConversations.map((conversation) => (
                 <div
                   key={conversation.partner._id}
                   onClick={() => handleSelectConversation(conversation)}

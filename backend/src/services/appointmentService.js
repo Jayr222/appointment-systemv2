@@ -215,15 +215,38 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
     if (isUnavailable) {
       // If doctor has specific unavailable time slots, filter those out
       if (isUnavailable.unavailableTimes && isUnavailable.unavailableTimes.length > 0) {
+        // Helper to parse time to minutes for accurate comparison
+        const parseTimeToMinutesForFilter = (timeStr) => {
+          if (!timeStr) return null;
+          const time = timeStr.trim().toUpperCase();
+          const match = time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/);
+          if (match) {
+            let hour = parseInt(match[1]);
+            const minute = parseInt(match[2]);
+            const period = match[3];
+            if (period === 'PM' && hour !== 12) hour += 12;
+            else if (period === 'AM' && hour === 12) hour = 0;
+            return hour * 60 + minute;
+          }
+          const match24 = time.match(/(\d{1,2}):(\d{2})/);
+          if (match24) {
+            return parseInt(match24[1]) * 60 + parseInt(match24[2]);
+          }
+          return null;
+        };
+        
         // Filter out slots that fall within unavailable time ranges
         const unavailableRanges = isUnavailable.unavailableTimes.map(slot => ({
-          start: parseTimeToHourForAvailability(slot.startTime),
-          end: parseTimeToHourForAvailability(slot.endTime)
+          startMinutes: parseTimeToMinutesForFilter(slot.startTime),
+          endMinutes: parseTimeToMinutesForFilter(slot.endTime)
         }));
 
         const filteredSlots = timeSlots.filter(slot => {
+          const slotMinutes = slot.hour * 60 + slot.minute;
           return !unavailableRanges.some(range => {
-            return slot.hour >= range.start && slot.hour < range.end;
+            if (range.startMinutes === null || range.endMinutes === null) return false;
+            // Check if slot falls within unavailable range
+            return slotMinutes >= range.startMinutes && slotMinutes < range.endMinutes;
           });
         });
 
