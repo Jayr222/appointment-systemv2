@@ -557,12 +557,12 @@ export const resetPassword = async (req, res) => {
 
     console.log('🔍 Searching for user with token hash:', resetPasswordToken.substring(0, 20) + '...');
 
-    // Find user with valid token
+    // Find user with valid token - include password field so we can modify it
     const user = await User.findOne({
       resetPasswordToken,
       resetPasswordExpire: { $gt: Date.now() },
       isDeleted: { $ne: true }
-    });
+    }).select('+password');
 
     if (!user) {
       console.log('❌ No user found with valid token');
@@ -641,11 +641,29 @@ export const resetPassword = async (req, res) => {
     
     console.log('✅ User found, resetting password for:', user.email);
 
-    // Set new password
+    // Set new password - mark as modified to ensure pre-save hook hashes it
     user.password = password;
+    user.markModified('password'); // Explicitly mark password as modified
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-    await user.save();
+    user.lastPasswordChange = new Date(); // Update last password change timestamp
+    
+    console.log('💾 Saving new password...');
+    const savedUser = await user.save();
+    
+    // Verify password was saved and hashed
+    const verifyUser = await User.findById(savedUser._id).select('+password');
+    const isPasswordHashed = verifyUser.password && verifyUser.password.startsWith('$2'); // bcrypt hashes start with $2
+    console.log('🔐 Password saved verification:', {
+      hasPassword: !!verifyUser.password,
+      isHashed: isPasswordHashed,
+      passwordLength: verifyUser.password?.length
+    });
+    
+    if (!isPasswordHashed) {
+      console.error('❌ CRITICAL: Password was not hashed!');
+      return res.status(500).json({ message: 'Failed to save password. Please try again.' });
+    }
 
     res.status(200).json({
       success: true,
