@@ -1,3 +1,5 @@
+// Import BSON FIRST before mongoose to ensure it's loaded
+import 'bson';
 import mongoose from 'mongoose';
 import { config } from './env.js';
 
