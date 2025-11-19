@@ -441,9 +441,22 @@ export const forgotPassword = async (req, res) => {
       .digest('hex');
     const resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
 
+    console.log('🔑 Generating reset token for:', normalizedEmail);
+    console.log('   Token (unhashed):', resetToken.substring(0, 20) + '...');
+    console.log('   Token hash:', resetPasswordToken.substring(0, 20) + '...');
+    console.log('   Expires at:', new Date(resetPasswordExpire).toISOString());
+
     user.resetPasswordToken = resetPasswordToken;
     user.resetPasswordExpire = resetPasswordExpire;
-    await user.save({ validateBeforeSave: false });
+    const savedUser = await user.save({ validateBeforeSave: false });
+    
+    // Verify token was saved
+    console.log('💾 Token saved to database:', {
+      userId: savedUser._id,
+      hasToken: !!savedUser.resetPasswordToken,
+      tokenHashMatch: savedUser.resetPasswordToken === resetPasswordToken,
+      expireTime: savedUser.resetPasswordExpire
+    });
 
     // Send email
     try {
@@ -552,17 +565,42 @@ export const resetPassword = async (req, res) => {
       const anyUserWithToken = await User.findOne({
         resetPasswordToken,
         isDeleted: { $ne: true }
-      }).select('email resetPasswordExpire');
+      }).select('email resetPasswordExpire resetPasswordToken');
       
       if (anyUserWithToken) {
         console.log('⚠️ Found user with token but expired:', {
           email: anyUserWithToken.email,
           expireTime: anyUserWithToken.resetPasswordExpire,
           currentTime: Date.now(),
-          expired: anyUserWithToken.resetPasswordExpire <= Date.now()
+          expired: anyUserWithToken.resetPasswordExpire <= Date.now(),
+          storedTokenHash: anyUserWithToken.resetPasswordToken?.substring(0, 20) + '...',
+          searchTokenHash: resetPasswordToken.substring(0, 20) + '...',
+          hashesMatch: anyUserWithToken.resetPasswordToken === resetPasswordToken
         });
       } else {
         console.log('❌ No user found with this token hash at all');
+        
+        // Additional debugging: Check if user exists with any reset token
+        const usersWithAnyToken = await User.find({
+          resetPasswordToken: { $exists: true, $ne: null },
+          isDeleted: { $ne: true }
+        }).select('email resetPasswordExpire resetPasswordToken').limit(5);
+        
+        console.log('🔍 Users with reset tokens in database:', usersWithAnyToken.length);
+        if (usersWithAnyToken.length > 0) {
+          console.log('   Sample users:', usersWithAnyToken.map(u => ({
+            email: u.email,
+            hasExpired: u.resetPasswordExpire <= Date.now(),
+            tokenHash: u.resetPasswordToken?.substring(0, 20) + '...'
+          })));
+        }
+        
+        // Check if this might be an old token (user requested a new one)
+        console.log('💡 Possible reasons:');
+        console.log('   1. Token was already used (tokens are cleared after successful reset)');
+        console.log('   2. User requested a new reset link (old token was overwritten)');
+        console.log('   3. Token expired and was cleared');
+        console.log('   4. Database sync issue');
       }
       
       return res.status(400).json({ message: 'Invalid or expired reset token' });
