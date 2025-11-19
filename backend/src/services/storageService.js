@@ -3,6 +3,8 @@
  * Stores files directly in MongoDB using GridFS
  */
 
+// Import BSON FIRST before mongodb to ensure it's available
+import 'bson';
 import mongoose from 'mongoose';
 import { GridFSBucket } from 'mongodb';
 import path from 'path';

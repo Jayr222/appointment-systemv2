@@ -1,5 +1,11 @@
 // Vercel serverless function handler for Express app
-// Import the Express app - it handles all route registration
+
+// CRITICAL: Import BSON preload FIRST before anything that uses MongoDB
+// This ensures BSON is loaded and available when MongoDB driver needs it
+// This fixes the "Cannot read properties of undefined (reading 'NumberUtils')" error
+import './bson-preload.js';
+
+// Now import the Express app - it handles all route registration
 import app from '../backend/src/server.js';
 
 // CORS helper function - apply CORS headers
