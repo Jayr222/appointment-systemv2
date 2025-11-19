@@ -246,11 +246,23 @@ export const getTodayQueue = async (doctorId = null) => {
     });
 
     // Fetch the most recent vital signs for each patient
+    // Only show vital signs if the appointment has a doctor assigned (i.e., patient is assigned to a doctor)
     const appointmentsWithVitals = await Promise.all(
       result.map(async (appointment) => {
         try {
           const patientId = appointment.patient?._id || appointment.patient;
           if (!patientId) {
+            return {
+              ...appointment,
+              latestVitalSigns: null
+            };
+          }
+
+          // Only fetch vital signs if this appointment has a doctor assigned
+          // This ensures vital signs are only visible for appointments where patient is assigned to a doctor
+          const appointmentDoctorId = appointment.doctor?._id || appointment.doctor;
+          if (!appointmentDoctorId) {
+            // No doctor assigned to this appointment, don't show vital signs
             return {
               ...appointment,
               latestVitalSigns: null

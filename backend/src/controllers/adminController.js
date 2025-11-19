@@ -1035,9 +1035,28 @@ export const recordVitalSigns = async (req, res) => {
 // @access  Private (Admin or Doctor)
 export const getPatientVitalSigns = async (req, res) => {
   try {
-    const vitalSigns = await VitalSigns.find({ patient: req.params.patientId })
+    const { patientId } = req.params;
+    const userRole = req.user.role;
+
+    // If doctor is requesting, verify the patient is assigned to them
+    if (userRole === 'doctor') {
+      const assignmentExists = await Appointment.exists({
+        doctor: req.user.id,
+        patient: patientId,
+        status: { $in: ['pending', 'confirmed', 'completed'] }
+      });
+
+      if (!assignmentExists) {
+        return res.status(403).json({ 
+          message: 'You are not authorized to view vital signs for this patient. This patient is not assigned to you.' 
+        });
+      }
+    }
+    // Admins can view all patient vital signs (no restriction)
+
+    const vitalSigns = await VitalSigns.find({ patient: patientId })
       .populate('recordedBy', 'name')
-      .populate('appointment', 'appointmentDate appointmentTime')
+      .populate('appointment', 'appointmentDate appointmentTime doctor')
       .sort({ createdAt: -1 });
 
     res.json({

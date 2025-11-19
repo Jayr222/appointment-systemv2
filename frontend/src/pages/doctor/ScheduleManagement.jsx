@@ -5,8 +5,9 @@ import doctorAvailabilityService from '../../services/doctorAvailabilityService'
 const ScheduleManagement = () => {
   const [schedule, setSchedule] = useState([]);
   const [unavailabilities, setUnavailabilities] = useState([]);
+  const [breakTimes, setBreakTimes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('appointments'); // 'appointments' or 'availability'
+  const [activeTab, setActiveTab] = useState('appointments'); // 'appointments', 'availability', or 'break-times'
   
   // Form state for marking unavailable
   const [showUnavailableForm, setShowUnavailableForm] = useState(false);
@@ -19,9 +20,20 @@ const ScheduleManagement = () => {
   });
   const [timeSlot, setTimeSlot] = useState({ startTime: '', endTime: '' });
 
+  // Form state for break times
+  const [showBreakTimeForm, setShowBreakTimeForm] = useState(false);
+  const [breakTimeForm, setBreakTimeForm] = useState({
+    daysOfWeek: [],
+    specificDate: '',
+    startTime: '',
+    endTime: '',
+    description: 'Break Time'
+  });
+
   useEffect(() => {
     fetchSchedule();
     fetchAvailability();
+    fetchBreakTimes();
   }, []);
 
   const fetchSchedule = async () => {
@@ -41,6 +53,15 @@ const ScheduleManagement = () => {
       setUnavailabilities(response.unavailabilities || []);
     } catch (error) {
       console.error('Error fetching availability:', error);
+    }
+  };
+
+  const fetchBreakTimes = async () => {
+    try {
+      const response = await doctorAvailabilityService.getBreakTimes();
+      setBreakTimes(response.breakTimes || []);
+    } catch (error) {
+      console.error('Error fetching break times:', error);
     }
   };
 
@@ -124,6 +145,71 @@ const ScheduleManagement = () => {
     return labels[reason] || reason;
   };
 
+  const handleAddBreakTime = async (e) => {
+    e.preventDefault();
+    try {
+      // Validate: either daysOfWeek or specificDate must be provided
+      if ((!breakTimeForm.daysOfWeek || breakTimeForm.daysOfWeek.length === 0) && !breakTimeForm.specificDate) {
+        alert('Please select either days of week or a specific date');
+        return;
+      }
+
+      if (!breakTimeForm.startTime || !breakTimeForm.endTime) {
+        alert('Please provide both start and end times');
+        return;
+      }
+
+      await doctorAvailabilityService.addBreakTime({
+        ...breakTimeForm,
+        specificDate: breakTimeForm.specificDate || null
+      });
+      
+      alert('Break time added successfully');
+      setShowBreakTimeForm(false);
+      setBreakTimeForm({
+        daysOfWeek: [],
+        specificDate: '',
+        startTime: '',
+        endTime: '',
+        description: 'Break Time'
+      });
+      fetchBreakTimes();
+    } catch (error) {
+      console.error('Error adding break time:', error);
+      alert(error.response?.data?.message || 'Failed to add break time');
+    }
+  };
+
+  const handleRemoveBreakTime = async (id) => {
+    if (!window.confirm('Are you sure you want to remove this break time?')) {
+      return;
+    }
+    try {
+      await doctorAvailabilityService.removeBreakTime(id);
+      alert('Break time removed successfully');
+      fetchBreakTimes();
+    } catch (error) {
+      console.error('Error removing break time:', error);
+      alert(error.response?.data?.message || 'Failed to remove break time');
+    }
+  };
+
+  const handleDayToggle = (day) => {
+    setBreakTimeForm(prev => {
+      const currentDays = prev.daysOfWeek || [];
+      if (currentDays.includes(day)) {
+        return { ...prev, daysOfWeek: currentDays.filter(d => d !== day), specificDate: '' };
+      } else {
+        return { ...prev, daysOfWeek: [...currentDays, day], specificDate: '' };
+      }
+    });
+  };
+
+  const getDayLabel = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day];
+  };
+
   if (loading) {
     return <div className="text-center py-8">Loading...</div>;
   }
@@ -154,6 +240,16 @@ const ScheduleManagement = () => {
             }`}
           >
             Mark Unavailable
+          </button>
+          <button
+            onClick={() => setActiveTab('break-times')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'break-times'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Break Times
           </button>
         </nav>
       </div>
@@ -375,6 +471,159 @@ const ScheduleManagement = () => {
                       </div>
                       <button
                         onClick={() => handleRemoveUnavailability(unavailability._id)}
+                        className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Break Times Tab */}
+      {activeTab === 'break-times' && (
+        <div className="space-y-6">
+          {/* Add Break Time Form */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">Manage Break Times</h2>
+              <button
+                onClick={() => setShowBreakTimeForm(!showBreakTimeForm)}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                {showBreakTimeForm ? 'Cancel' : '+ Add Break Time'}
+              </button>
+            </div>
+
+            {showBreakTimeForm && (
+              <form onSubmit={handleAddBreakTime} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Days of Week (for recurring break) OR Specific Date (for one-time break)
+                  </label>
+                  <div className="grid grid-cols-7 gap-2 mb-3">
+                    {[1, 2, 3, 4, 5, 6, 0].map(day => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => handleDayToggle(day)}
+                        className={`px-3 py-2 text-sm rounded border ${
+                          breakTimeForm.daysOfWeek?.includes(day)
+                            ? 'bg-green-600 text-white border-green-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {getDayLabel(day).substring(0, 3)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      OR Specific Date (leave blank if using recurring days)
+                    </label>
+                    <input
+                      type="date"
+                      value={breakTimeForm.specificDate}
+                      onChange={(e) => {
+                        setBreakTimeForm({ ...breakTimeForm, specificDate: e.target.value, daysOfWeek: [] });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Time (24-hour format)
+                    </label>
+                    <input
+                      type="time"
+                      required
+                      value={breakTimeForm.startTime}
+                      onChange={(e) => setBreakTimeForm({ ...breakTimeForm, startTime: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      End Time (24-hour format)
+                    </label>
+                    <input
+                      type="time"
+                      required
+                      value={breakTimeForm.endTime}
+                      onChange={(e) => setBreakTimeForm({ ...breakTimeForm, endTime: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={breakTimeForm.description}
+                    onChange={(e) => setBreakTimeForm({ ...breakTimeForm, description: e.target.value })}
+                    placeholder="e.g., Lunch Break, Coffee Break"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  Add Break Time
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* Current Break Times */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Current Break Times</h2>
+            {breakTimes.length === 0 ? (
+              <p className="text-gray-600">No break times configured</p>
+            ) : (
+              <div className="space-y-4">
+                {breakTimes.map((breakTime) => (
+                  <div
+                    key={breakTime._id}
+                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded font-semibold">
+                            Break Time
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-700">
+                          <strong>Time:</strong> {breakTime.startTime} - {breakTime.endTime}
+                        </p>
+                        {breakTime.daysOfWeek && breakTime.daysOfWeek.length > 0 && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            <strong>Days:</strong> {breakTime.daysOfWeek.map(d => getDayLabel(d)).join(', ')}
+                          </p>
+                        )}
+                        {breakTime.specificDate && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            <strong>Date:</strong> {new Date(breakTime.specificDate).toLocaleDateString()}
+                          </p>
+                        )}
+                        {breakTime.description && (
+                          <p className="text-sm text-gray-700 mt-2">{breakTime.description}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleRemoveBreakTime(breakTime._id)}
                         className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
                       >
                         Remove

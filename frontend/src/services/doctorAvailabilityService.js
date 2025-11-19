@@ -24,6 +24,28 @@ export const doctorAvailabilityService = {
   removeUnavailability: async (id) => {
     const response = await api.delete(`/doctor/availability/${id}`);
     return response.data;
+  },
+
+  // Break Times
+  getBreakTimes: async (doctorId = null) => {
+    const params = doctorId ? { doctorId } : {};
+    const response = await api.get('/doctor/availability/break-times', { params });
+    return response.data;
+  },
+
+  addBreakTime: async (data) => {
+    const response = await api.post('/doctor/availability/break-times', data);
+    return response.data;
+  },
+
+  removeBreakTime: async (id) => {
+    const response = await api.delete(`/doctor/availability/break-times/${id}`);
+    return response.data;
+  },
+
+  updateBreakTime: async (id, data) => {
+    const response = await api.put(`/doctor/availability/break-times/${id}`, data);
+    return response.data;
   }
 };
 

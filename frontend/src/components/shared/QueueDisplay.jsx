@@ -606,7 +606,7 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
                           Start
                         </button>
                       )}
-                      {appointment.queueStatus === 'in-progress' && (
+                      {appointment.queueStatus === 'in-progress' && user?.role === 'doctor' && (
                         <button
                           onClick={() => navigate('/doctor/add-medical-record', { state: { appointment } })}
                           className="px-3 py-1 text-white rounded text-sm"

@@ -1,5 +1,6 @@
 import Appointment from '../models/Appointment.js';
 import DoctorAvailability, { parseTimeToHourForAvailability } from '../models/DoctorAvailability.js';
+import DoctorBreakTime from '../models/DoctorBreakTime.js';
 import SlotHold from '../models/SlotHold.js';
 import { validateAppointmentDate } from '../utils/validators.js';
 
@@ -89,6 +90,15 @@ export const checkAvailability = async (doctorId, date, time) => {
       return {
         available: false,
         reason: 'Doctor is unavailable on this date. Please select another date.'
+      };
+    }
+
+    // Check if doctor has a break at this time
+    const hasBreak = await DoctorBreakTime.hasBreakAtTime(doctorId, date, time);
+    if (hasBreak) {
+      return {
+        available: false,
+        reason: 'Doctor is on break at this time. Please select another time.'
       };
     }
 
@@ -194,8 +204,34 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
 
         const bookedTimes = existingAppointments.map(apt => apt.appointmentTime);
         
+        // Get break times for this doctor
+        const breakTimes = await DoctorBreakTime.getDoctorBreakTimes(doctorId);
+        
+        // Helper function to parse time to minutes
+        const parseTimeToMinutes = (timeStr) => {
+          if (!timeStr) return null;
+          const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+          if (match) {
+            const hour = parseInt(match[1]);
+            const minute = parseInt(match[2]);
+            return hour * 60 + minute;
+          }
+          // Try 12-hour format
+          const match12 = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+          if (match12) {
+            let hour = parseInt(match12[1]);
+            const minute = parseInt(match12[2]);
+            const period = match12[3].toUpperCase();
+            if (period === 'PM' && hour !== 12) hour += 12;
+            if (period === 'AM' && hour === 12) hour = 0;
+            return hour * 60 + minute;
+          }
+          return null;
+        };
+        
         const available = filteredSlots.filter(slot => {
-          return !bookedTimes.some(bookedTime => {
+          // Check if slot is booked
+          const isBooked = bookedTimes.some(bookedTime => {
             const bookedHour = parseTimeToHour(bookedTime);
             const bookedMinute = parseTimeToMinute(bookedTime);
             const bookedSlotMinute = bookedMinute < 30 ? 0 : 30;
@@ -213,6 +249,39 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
             
             return false;
           });
+          
+          if (isBooked) return false;
+          
+          // Check if slot falls within any break time
+          const checkDate = new Date(date);
+          const dayOfWeek = checkDate.getDay();
+          checkDate.setHours(0, 0, 0, 0);
+          
+          const isBreakTime = breakTimes.some(breakTime => {
+            // Check if break applies to this date (recurring or specific)
+            const isRecurringMatch = breakTime.daysOfWeek && breakTime.daysOfWeek.includes(dayOfWeek);
+            const isSpecificMatch = breakTime.specificDate && 
+              new Date(breakTime.specificDate).setHours(0, 0, 0, 0) === checkDate.getTime();
+            
+            if (!isRecurringMatch && !isSpecificMatch) return false;
+            
+            // Check if slot time falls within break time
+            const breakStartMinutes = parseTimeToMinutes(breakTime.startTime);
+            const breakEndMinutes = parseTimeToMinutes(breakTime.endTime);
+            const slotMinutes = slot.hour * 60 + slot.minute;
+            
+            if (breakStartMinutes === null || breakEndMinutes === null) return false;
+            
+            if (breakEndMinutes < breakStartMinutes) {
+              // Break spans midnight
+              return slotMinutes >= breakStartMinutes || slotMinutes < breakEndMinutes;
+            } else {
+              // Normal break
+              return slotMinutes >= breakStartMinutes && slotMinutes < breakEndMinutes;
+            }
+          });
+          
+          return !isBreakTime;
         });
 
         return {
@@ -240,10 +309,35 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
 
     const bookedTimes = existingAppointments.map(apt => apt.appointmentTime);
     
-    // Filter out booked slots - compare by normalizing times to same format
+    // Get break times for this doctor
+    const breakTimes = await DoctorBreakTime.getDoctorBreakTimes(doctorId);
+    
+    // Helper function to parse time to minutes
+    const parseTimeToMinutes = (timeStr) => {
+      if (!timeStr) return null;
+      const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+      if (match) {
+        const hour = parseInt(match[1]);
+        const minute = parseInt(match[2]);
+        return hour * 60 + minute;
+      }
+      // Try 12-hour format
+      const match12 = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (match12) {
+        let hour = parseInt(match12[1]);
+        const minute = parseInt(match12[2]);
+        const period = match12[3].toUpperCase();
+        if (period === 'PM' && hour !== 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+        return hour * 60 + minute;
+      }
+      return null;
+    };
+    
+    // Filter out booked slots and break times
     const available = timeSlots.filter(slot => {
       // Check if this slot is booked
-      return !bookedTimes.some(bookedTime => {
+      const isBooked = bookedTimes.some(bookedTime => {
         const bookedHour = parseTimeToHour(bookedTime);
         const bookedMinute = parseTimeToMinute(bookedTime);
         
@@ -267,6 +361,39 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
         
         return false;
       });
+      
+      if (isBooked) return false;
+      
+      // Check if slot falls within any break time
+      const checkDate = new Date(date);
+      const dayOfWeek = checkDate.getDay();
+      checkDate.setHours(0, 0, 0, 0);
+      
+      const isBreakTime = breakTimes.some(breakTime => {
+        // Check if break applies to this date (recurring or specific)
+        const isRecurringMatch = breakTime.daysOfWeek && breakTime.daysOfWeek.includes(dayOfWeek);
+        const isSpecificMatch = breakTime.specificDate && 
+          new Date(breakTime.specificDate).setHours(0, 0, 0, 0) === checkDate.getTime();
+        
+        if (!isRecurringMatch && !isSpecificMatch) return false;
+        
+        // Check if slot time falls within break time
+        const breakStartMinutes = parseTimeToMinutes(breakTime.startTime);
+        const breakEndMinutes = parseTimeToMinutes(breakTime.endTime);
+        const slotMinutes = slot.hour * 60 + slot.minute;
+        
+        if (breakStartMinutes === null || breakEndMinutes === null) return false;
+        
+        if (breakEndMinutes < breakStartMinutes) {
+          // Break spans midnight
+          return slotMinutes >= breakStartMinutes || slotMinutes < breakEndMinutes;
+        } else {
+          // Normal break
+          return slotMinutes >= breakStartMinutes && slotMinutes < breakEndMinutes;
+        }
+      });
+      
+      return !isBreakTime;
     });
 
     return {

@@ -5,13 +5,55 @@ import { FaExclamationTriangle, FaInfoCircle, FaChevronDown, FaChevronUp, FaEdit
 import { useNotifications } from '../../context/NotificationContext';
 
 const BookAppointment = () => {
+  // Load saved form data from localStorage on component mount
+  const loadSavedFormData = () => {
+    try {
+      const saved = localStorage.getItem('bookAppointmentFormData');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Check if saved data is less than 24 hours old
+        if (parsed.timestamp && Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+          return parsed.data;
+        } else {
+          // Clear expired data
+          localStorage.removeItem('bookAppointmentFormData');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading saved form data:', error);
+      localStorage.removeItem('bookAppointmentFormData');
+    }
+    return {
+      doctor: '',
+      appointmentDate: '',
+      appointmentTime: '',
+      reason: ''
+    };
+  };
+
+  // Save form data to localStorage
+  const saveFormData = (data) => {
+    try {
+      localStorage.setItem('bookAppointmentFormData', JSON.stringify({
+        data: data,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Error saving form data:', error);
+    }
+  };
+
+  // Clear saved form data from localStorage
+  const clearSavedFormData = () => {
+    try {
+      localStorage.removeItem('bookAppointmentFormData');
+    } catch (error) {
+      console.error('Error clearing saved form data:', error);
+    }
+  };
+
   const [doctors, setDoctors] = useState([]);
-  const [formData, setFormData] = useState({
-    doctor: '',
-    appointmentDate: '',
-    appointmentTime: '',
-    reason: ''
-  });
+  const [formData, setFormData] = useState(loadSavedFormData());
   const [medicalHistory, setMedicalHistory] = useState(null);
   const [showMedicalHistory, setShowMedicalHistory] = useState(false);
   const [includeMedicalHistory, setIncludeMedicalHistory] = useState(true);
@@ -42,7 +84,19 @@ const BookAppointment = () => {
 
     fetchDoctors();
     fetchMedicalHistory();
+    
+    // Fetch available slots if form data is restored
+    if (formData.doctor && formData.appointmentDate) {
+      fetchAvailableSlots(formData.doctor, formData.appointmentDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Save form data to localStorage whenever it changes
+  useEffect(() => {
+    saveFormData(formData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData]);
 
   const fetchMedicalHistory = async () => {
     setLoadingMedicalHistory(true);
@@ -68,63 +122,75 @@ const BookAppointment = () => {
 
   const handleChange = async (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
-
-    // If doctor or date changes, fetch available time slots
-    if (name === 'doctor' || name === 'appointmentDate') {
+    
+    // Update form data using functional update to ensure we have the latest state
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        [name]: value
+      };
+      
+      // If doctor changes, reset time slot
       if (name === 'doctor') {
-        // Reset time when doctor changes
-        setFormData(prev => ({ ...prev, appointmentTime: '' }));
+        updated.appointmentTime = '';
         setSelectedSlotUnavailable(false);
       }
-      fetchAvailableSlots(name === 'doctor' ? value : formData.doctor, name === 'appointmentDate' ? value : formData.appointmentDate);
-    }
-
-    // If time slot is selected, check availability in real-time
-    if (name === 'appointmentTime' && value) {
-      // Use formData values (doctor and date should already be set)
-      const currentDoctor = formData.doctor;
-      const currentDate = formData.appointmentDate;
       
-      if (currentDoctor && currentDate) {
+      // If doctor or date changes, fetch available time slots
+      if (name === 'doctor' || name === 'appointmentDate') {
+        const doctorId = name === 'doctor' ? value : updated.doctor;
+        const date = name === 'appointmentDate' ? value : updated.appointmentDate;
+        
+        if (doctorId && date) {
+          // Use setTimeout to ensure state is updated before fetching slots
+          setTimeout(() => {
+            fetchAvailableSlots(doctorId, date);
+          }, 0);
+        } else {
+          setAvailableSlots([]);
+        }
+      }
+      
+      // If time slot is selected, check availability in real-time
+      if (name === 'appointmentTime' && value && updated.doctor && updated.appointmentDate) {
         setCheckingSlotAvailability(true);
         setSelectedSlotUnavailable(false);
         
-        try {
-          // Re-fetch available slots to check if the selected slot is still available
-          const response = await patientService.getAvailableSlots(currentDoctor, currentDate);
-          
-          if (response.success && response.slots) {
-            const isStillAvailable = response.slots.includes(value);
-            
-            if (!isStillAvailable) {
-              // Selected slot is no longer available
-              setSelectedSlotUnavailable(true);
-              setFormData(prev => ({ ...prev, appointmentTime: '' })); // Clear selected time
-              addNotification({
-                type: 'error',
-                title: 'Time Slot Unavailable',
-                message: `The time slot "${value}" has just been taken by another patient. Please select another available time.`,
-                showBrowserNotification: true
-              });
+        // Check slot availability
+        patientService.getAvailableSlots(updated.doctor, updated.appointmentDate)
+          .then(response => {
+            if (response.success && response.slots) {
+              const isStillAvailable = response.slots.includes(value);
               
-              // Update available slots
-              setAvailableSlots(response.slots || []);
-            } else {
-              // Slot is still available - update the list to reflect current state
-              setAvailableSlots(response.slots || []);
+              if (!isStillAvailable) {
+                // Selected slot is no longer available
+                setSelectedSlotUnavailable(true);
+                setFormData(prev => ({ ...prev, appointmentTime: '' })); // Clear selected time
+                addNotification({
+                  type: 'error',
+                  title: 'Time Slot Unavailable',
+                  message: `The time slot "${value}" has just been taken by another patient. Please select another available time.`,
+                  showBrowserNotification: true
+                });
+                
+                // Update available slots
+                setAvailableSlots(response.slots || []);
+              } else {
+                // Slot is still available - update the list to reflect current state
+                setAvailableSlots(response.slots || []);
+              }
             }
-          }
-        } catch (error) {
-          console.error('Error checking slot availability:', error);
-        } finally {
-          setCheckingSlotAvailability(false);
-        }
+          })
+          .catch(error => {
+            console.error('Error checking slot availability:', error);
+          })
+          .finally(() => {
+            setCheckingSlotAvailability(false);
+          });
       }
-    }
+      
+      return updated;
+    });
   };
 
   const fetchAvailableSlots = async (doctorId, date) => {
@@ -240,14 +306,16 @@ const BookAppointment = () => {
         });
       }, 1000);
       
-      // Reset form after a short delay
+      // Reset form after a short delay and clear saved data
       setTimeout(() => {
-        setFormData({
+        const resetData = {
           doctor: '',
           appointmentDate: '',
           appointmentTime: '',
           reason: ''
-        });
+        };
+        setFormData(resetData);
+        clearSavedFormData();
       }, 500);
       
     } catch (err) {
