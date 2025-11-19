@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
-import { FaUser, FaClock, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaBell, FaSearch, FaHeartbeat, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { FaUser, FaClock, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaBell, FaSearch, FaHeartbeat, FaChevronDown, FaChevronUp, FaWalking, FaCalendarCheck } from 'react-icons/fa';
 import queueService from '../../services/queueService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from '../../context/NotificationContext';
@@ -449,6 +449,26 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
                       <p className="font-semibold text-gray-800">
                         {formatNameForPrivacy(appointment.patient?.name || 'Unknown Patient')}
                       </p>
+                      {/* Visit Type Badge */}
+                      {appointment.visitType && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          appointment.visitType === 'walk-in'
+                            ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                            : 'bg-blue-100 text-blue-700 border border-blue-300'
+                        }`}>
+                          {appointment.visitType === 'walk-in' ? (
+                            <>
+                              <FaWalking className="text-xs" />
+                              <span>Walk-In</span>
+                            </>
+                          ) : (
+                            <>
+                              <FaCalendarCheck className="text-xs" />
+                              <span>Booked</span>
+                            </>
+                          )}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
                       <span>Dr. {appointment.doctor?.name || 'Unknown'}</span>

@@ -253,6 +253,7 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
           if (isBooked) return false;
           
           // Check if slot falls within any break time
+          // Since appointments are 30 minutes, we need to check if the slot overlaps with break time
           const checkDate = new Date(date);
           const dayOfWeek = checkDate.getDay();
           checkDate.setHours(0, 0, 0, 0);
@@ -265,19 +266,24 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
             
             if (!isRecurringMatch && !isSpecificMatch) return false;
             
-            // Check if slot time falls within break time
+            // Check if slot time overlaps with break time
+            // Slots are 30 minutes, so check if slot overlaps with break range
             const breakStartMinutes = parseTimeToMinutes(breakTime.startTime);
             const breakEndMinutes = parseTimeToMinutes(breakTime.endTime);
-            const slotMinutes = slot.hour * 60 + slot.minute;
+            const slotStartMinutes = slot.hour * 60 + slot.minute;
+            const slotEndMinutes = slotStartMinutes + 30; // 30-minute appointment duration
             
             if (breakStartMinutes === null || breakEndMinutes === null) return false;
             
             if (breakEndMinutes < breakStartMinutes) {
-              // Break spans midnight
-              return slotMinutes >= breakStartMinutes || slotMinutes < breakEndMinutes;
+              // Break spans midnight (e.g., 23:00 - 01:00)
+              // Slot overlaps if: slot starts before break ends OR slot ends after break starts
+              return slotStartMinutes < breakEndMinutes || slotEndMinutes > breakStartMinutes;
             } else {
-              // Normal break
-              return slotMinutes >= breakStartMinutes && slotMinutes < breakEndMinutes;
+              // Normal break (e.g., 12:00 - 13:00)
+              // Slot overlaps if: slot starts before break ends AND slot ends after break starts
+              // This ensures any overlapping 30-minute slot is excluded
+              return slotStartMinutes < breakEndMinutes && slotEndMinutes > breakStartMinutes;
             }
           });
           
@@ -365,6 +371,7 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
       if (isBooked) return false;
       
       // Check if slot falls within any break time
+      // Since appointments are 30 minutes, we need to check if the slot overlaps with break time
       const checkDate = new Date(date);
       const dayOfWeek = checkDate.getDay();
       checkDate.setHours(0, 0, 0, 0);
@@ -377,19 +384,24 @@ export const getAvailableTimeSlots = async (doctorId, date) => {
         
         if (!isRecurringMatch && !isSpecificMatch) return false;
         
-        // Check if slot time falls within break time
+        // Check if slot time overlaps with break time
+        // Slots are 30 minutes, so check if slot overlaps with break range
         const breakStartMinutes = parseTimeToMinutes(breakTime.startTime);
         const breakEndMinutes = parseTimeToMinutes(breakTime.endTime);
-        const slotMinutes = slot.hour * 60 + slot.minute;
+        const slotStartMinutes = slot.hour * 60 + slot.minute;
+        const slotEndMinutes = slotStartMinutes + 30; // 30-minute appointment duration
         
         if (breakStartMinutes === null || breakEndMinutes === null) return false;
         
         if (breakEndMinutes < breakStartMinutes) {
-          // Break spans midnight
-          return slotMinutes >= breakStartMinutes || slotMinutes < breakEndMinutes;
+          // Break spans midnight (e.g., 23:00 - 01:00)
+          // Slot overlaps if: slot starts before break ends OR slot ends after break starts
+          return slotStartMinutes < breakEndMinutes || slotEndMinutes > breakStartMinutes;
         } else {
-          // Normal break
-          return slotMinutes >= breakStartMinutes && slotMinutes < breakEndMinutes;
+          // Normal break (e.g., 12:00 - 13:00)
+          // Slot overlaps if: slot starts before break ends AND slot ends after break starts
+          // This ensures any overlapping 30-minute slot is excluded
+          return slotStartMinutes < breakEndMinutes && slotEndMinutes > breakStartMinutes;
         }
       });
       
