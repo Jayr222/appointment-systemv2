@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   FaHeartbeat, FaHospital, FaStethoscope, FaNotesMedical, 
-  FaSearch, FaPills, FaFlask, FaCalendarAlt, FaDownload 
+  FaSearch, FaPills, FaFlask, FaCalendarAlt, FaDownload, FaPrint 
 } from 'react-icons/fa';
 import patientService from '../../services/patientService';
 
@@ -58,6 +58,193 @@ const Records = () => {
     } finally {
       setDownloading(false);
     }
+  };
+
+  const handlePrintPrescription = (record) => {
+    if (!record?.medications || record.medications.length === 0) return;
+
+    const printWindow = window.open('', '_blank');
+    const visitDate = new Date(record.createdAt).toLocaleDateString();
+    const doctorName = record.doctor?.name || 'Doctor';
+    const doctorSpecialization = record.doctor?.specialization || 'General Medicine';
+
+    const prescriptionHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Prescription - ${visitDate}</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+            body {
+              font-family: 'Arial', sans-serif;
+              padding: 40px;
+              max-width: 800px;
+              margin: 0 auto;
+              line-height: 1.6;
+            }
+            .header {
+              border-bottom: 3px solid #31694E;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .header h1 {
+              color: #31694E;
+              margin: 0 0 10px 0;
+              font-size: 28px;
+            }
+            .header .subtitle {
+              color: #666;
+              font-size: 14px;
+              margin: 5px 0;
+            }
+            .section {
+              margin-bottom: 25px;
+            }
+            .section-title {
+              font-weight: bold;
+              color: #31694E;
+              font-size: 16px;
+              margin-bottom: 10px;
+              border-bottom: 2px solid #e0e0e0;
+              padding-bottom: 5px;
+            }
+            .doctor-info {
+              background-color: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              margin-bottom: 25px;
+            }
+            .doctor-info p {
+              margin: 5px 0;
+              font-size: 14px;
+            }
+            .medication {
+              background-color: #f0f7f4;
+              border: 2px solid #31694E;
+              border-radius: 8px;
+              padding: 15px;
+              margin-bottom: 15px;
+              page-break-inside: avoid;
+            }
+            .medication-name {
+              font-size: 18px;
+              font-weight: bold;
+              color: #31694E;
+              margin-bottom: 10px;
+            }
+            .medication-details {
+              font-size: 14px;
+              color: #333;
+            }
+            .medication-details p {
+              margin: 5px 0;
+            }
+            .signature-section {
+              margin-top: 60px;
+              page-break-inside: avoid;
+            }
+            .signature-line {
+              border-top: 2px solid #000;
+              width: 250px;
+              margin-top: 60px;
+            }
+            .signature-text {
+              margin-top: 5px;
+              font-size: 14px;
+              color: #666;
+            }
+            .footer {
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 1px solid #ddd;
+              font-size: 12px;
+              color: #666;
+              text-align: center;
+            }
+            .print-button {
+              background-color: #31694E;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              font-size: 16px;
+              border-radius: 5px;
+              cursor: pointer;
+              margin: 20px 0;
+            }
+            .print-button:hover {
+              background-color: #27543e;
+            }
+            .rx-symbol {
+              font-size: 36px;
+              font-weight: bold;
+              color: #31694E;
+              margin-bottom: 15px;
+            }
+          </style>
+        </head>
+        <body>
+          <button onclick="window.print()" class="print-button no-print">🖨️ Print Prescription</button>
+          
+          <div class="header">
+            <h1>Medical Prescription</h1>
+            <p class="subtitle"><strong>Date:</strong> ${visitDate}</p>
+            ${record.diagnosis ? `<p class="subtitle"><strong>Diagnosis:</strong> ${record.diagnosis}</p>` : ''}
+          </div>
+
+          <div class="doctor-info">
+            <h3 style="margin-top: 0; color: #31694E;">Prescribing Doctor</h3>
+            <p><strong>Dr. ${doctorName}</strong></p>
+            <p>${doctorSpecialization}</p>
+          </div>
+
+          <div class="section">
+            <div class="rx-symbol">℞</div>
+            <div class="section-title">Prescribed Medications</div>
+            ${record.medications.map((med, index) => `
+              <div class="medication">
+                <div class="medication-name">${index + 1}. ${med.name}</div>
+                <div class="medication-details">
+                  ${med.dosage ? `<p><strong>Dosage:</strong> ${med.dosage}</p>` : ''}
+                  ${med.frequency ? `<p><strong>Frequency:</strong> ${med.frequency}</p>` : ''}
+                  ${med.duration ? `<p><strong>Duration:</strong> ${med.duration}</p>` : ''}
+                  ${med.instructions ? `<p><strong>Instructions:</strong> ${med.instructions}</p>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          ${record.treatmentPlan ? `
+            <div class="section">
+              <div class="section-title">Additional Instructions</div>
+              <p style="padding: 10px; background-color: #f8f9fa; border-radius: 5px;">${record.treatmentPlan.replace(/\n/g, '<br>')}</p>
+            </div>
+          ` : ''}
+
+          <div class="signature-section">
+            <p style="margin-bottom: 5px;"><strong>Doctor's Signature</strong></p>
+            <div class="signature-line"></div>
+            <div class="signature-text">
+              <p style="margin: 5px 0;"><strong>Dr. ${doctorName}</strong></p>
+              <p style="margin: 5px 0;">${doctorSpecialization}</p>
+              <p style="margin: 5px 0;">Licensed Medical Practitioner</p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>This prescription is valid for the specified duration. Please follow the prescribed dosage carefully.</p>
+            <p>For any concerns or questions, please contact your healthcare provider.</p>
+            <p style="margin-top: 10px; font-weight: bold;">Present this prescription when purchasing medications at the pharmacy.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(prescriptionHTML);
+    printWindow.document.close();
   };
 
   if (loading) {
@@ -243,9 +430,19 @@ const Records = () => {
               {/* Medications */}
               {selectedRecord.medications && selectedRecord.medications.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <FaPills className="mr-2 text-primary-500" /> Prescribed Medications
-                  </h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                      <FaPills className="mr-2 text-primary-500" /> Prescribed Medications
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => handlePrintPrescription(selectedRecord)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-[#31694E] text-white hover:bg-[#27543e] transition"
+                    >
+                      <FaPrint />
+                      Print Prescription
+                    </button>
+                  </div>
                   <div className="space-y-3">
                     {selectedRecord.medications.map((med, index) => (
                       <div key={index} className="bg-blue-50 p-4 rounded border border-blue-200">

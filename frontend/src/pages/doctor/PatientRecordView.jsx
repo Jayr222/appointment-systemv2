@@ -10,7 +10,8 @@ import {
   FaClipboardList,
   FaStethoscope,
   FaFileMedical,
-  FaDownload
+  FaDownload,
+  FaPrint
 } from 'react-icons/fa';
 import doctorService from '../../services/doctorService';
 
@@ -27,6 +28,7 @@ const PatientRecordView = () => {
   const [downloadingId, setDownloadingId] = useState(null);
   const [downloadErrors, setDownloadErrors] = useState({});
   const [activeTab, setActiveTab] = useState('records'); // 'records' or 'vitals'
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -150,6 +152,205 @@ const PatientRecordView = () => {
     }
   };
 
+  const handlePrintPrescription = (record) => {
+    if (!record?.medications || record.medications.length === 0) return;
+
+    const printWindow = window.open('', '_blank');
+    const visitDate = new Date(record.createdAt).toLocaleDateString();
+    const patientName = selectedPatient?.name || 'Patient';
+    const patientEmail = selectedPatient?.email || '';
+    const patientPhone = selectedPatient?.phone || '';
+
+    const prescriptionHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Prescription - ${patientName} - ${visitDate}</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+            body {
+              font-family: 'Arial', sans-serif;
+              padding: 40px;
+              max-width: 800px;
+              margin: 0 auto;
+              line-height: 1.6;
+            }
+            .header {
+              border-bottom: 3px solid #31694E;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .header h1 {
+              color: #31694E;
+              margin: 0 0 10px 0;
+              font-size: 28px;
+            }
+            .header .subtitle {
+              color: #666;
+              font-size: 14px;
+              margin: 5px 0;
+            }
+            .section {
+              margin-bottom: 25px;
+            }
+            .section-title {
+              font-weight: bold;
+              color: #31694E;
+              font-size: 16px;
+              margin-bottom: 10px;
+              border-bottom: 2px solid #e0e0e0;
+              padding-bottom: 5px;
+            }
+            .patient-info {
+              background-color: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              margin-bottom: 25px;
+            }
+            .patient-info p {
+              margin: 5px 0;
+              font-size: 14px;
+            }
+            .medication {
+              background-color: #f0f7f4;
+              border: 2px solid #31694E;
+              border-radius: 8px;
+              padding: 15px;
+              margin-bottom: 15px;
+              page-break-inside: avoid;
+            }
+            .medication-name {
+              font-size: 18px;
+              font-weight: bold;
+              color: #31694E;
+              margin-bottom: 10px;
+            }
+            .medication-details {
+              font-size: 14px;
+              color: #333;
+            }
+            .medication-details p {
+              margin: 5px 0;
+            }
+            .signature-section {
+              margin-top: 60px;
+              page-break-inside: avoid;
+            }
+            .signature-line {
+              border-top: 2px solid #000;
+              width: 250px;
+              margin-top: 60px;
+            }
+            .signature-text {
+              margin-top: 5px;
+              font-size: 14px;
+              color: #666;
+            }
+            .footer {
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 1px solid #ddd;
+              font-size: 12px;
+              color: #666;
+              text-align: center;
+            }
+            .print-button {
+              background-color: #31694E;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              font-size: 16px;
+              border-radius: 5px;
+              cursor: pointer;
+              margin: 20px 0;
+            }
+            .print-button:hover {
+              background-color: #27543e;
+            }
+            .rx-symbol {
+              font-size: 36px;
+              font-weight: bold;
+              color: #31694E;
+              margin-bottom: 15px;
+            }
+          </style>
+        </head>
+        <body>
+          <button onclick="window.print()" class="print-button no-print">🖨️ Print Prescription</button>
+          
+          <div class="header">
+            <h1>Medical Prescription</h1>
+            <p class="subtitle"><strong>Date:</strong> ${visitDate}</p>
+            ${record.diagnosis ? `<p class="subtitle"><strong>Diagnosis:</strong> ${record.diagnosis}</p>` : ''}
+          </div>
+
+          <div class="patient-info">
+            <h3 style="margin-top: 0; color: #31694E;">Patient Information</h3>
+            <p><strong>Name:</strong> ${patientName}</p>
+            ${patientEmail ? `<p><strong>Email:</strong> ${patientEmail}</p>` : ''}
+            ${patientPhone ? `<p><strong>Phone:</strong> ${patientPhone}</p>` : ''}
+          </div>
+
+          <div class="section">
+            <div class="rx-symbol">℞</div>
+            <div class="section-title">Prescribed Medications</div>
+            ${record.medications.map((med, index) => `
+              <div class="medication">
+                <div class="medication-name">${index + 1}. ${med.name}</div>
+                <div class="medication-details">
+                  ${med.dosage ? `<p><strong>Dosage:</strong> ${med.dosage}</p>` : ''}
+                  ${med.frequency ? `<p><strong>Frequency:</strong> ${med.frequency}</p>` : ''}
+                  ${med.duration ? `<p><strong>Duration:</strong> ${med.duration}</p>` : ''}
+                  ${med.instructions ? `<p><strong>Instructions:</strong> ${med.instructions}</p>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          ${record.treatmentPlan ? `
+            <div class="section">
+              <div class="section-title">Additional Instructions</div>
+              <p style="padding: 10px; background-color: #f8f9fa; border-radius: 5px;">${record.treatmentPlan.replace(/\n/g, '<br>')}</p>
+            </div>
+          ` : ''}
+
+          <div class="signature-section">
+            <p style="margin-bottom: 5px;"><strong>Prescribing Doctor</strong></p>
+            <div class="signature-line"></div>
+            <div class="signature-text">
+              <p style="margin: 5px 0;"><strong>Doctor's Signature</strong></p>
+              <p style="margin: 5px 0;">Licensed Medical Practitioner</p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>This prescription is valid for the specified duration. Please follow the prescribed dosage carefully.</p>
+            <p>For any concerns or questions, please contact your healthcare provider.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(prescriptionHTML);
+    printWindow.document.close();
+  };
+
+  const filteredPatients = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return patients;
+    }
+    const query = searchQuery.toLowerCase();
+    return patients.filter((patient) => 
+      patient.name?.toLowerCase().includes(query) ||
+      patient.email?.toLowerCase().includes(query) ||
+      patient.phone?.toLowerCase().includes(query)
+    );
+  }, [patients, searchQuery]);
+
   const selectedPatient = useMemo(
     () => patients.find((patient) => patient._id === selectedPatientId) || null,
     [patients, selectedPatientId]
@@ -186,14 +387,22 @@ const PatientRecordView = () => {
               <FaUser /> Assigned Patients
             </h2>
             <span className="text-sm text-gray-500">
-              {patients.length} {patients.length === 1 ? 'patient' : 'patients'}
+              {filteredPatients.length} {filteredPatients.length === 1 ? 'patient' : 'patients'}
             </span>
           </div>
 
           <div className="p-4 border-b border-gray-100">
-            <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-500 text-sm">
-              <FaSearch />
-              <span>Only patients with confirmed visits appear here</span>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FaSearch className="text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, email, or phone..."
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
             </div>
           </div>
 
@@ -208,8 +417,16 @@ const PatientRecordView = () => {
                   Once you complete visits, those patients will appear here.
                 </p>
               </div>
+            ) : filteredPatients.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">
+                <FaSearch className="text-3xl mx-auto mb-3 text-gray-400" />
+                <p>No patients match your search.</p>
+                <p className="text-sm mt-2">
+                  Try a different search term
+                </p>
+              </div>
             ) : (
-              patients.map((patient) => (
+              filteredPatients.map((patient) => (
                 <button
                   key={patient._id}
                   onClick={() => setSelectedPatientId(patient._id)}
@@ -420,9 +637,19 @@ const PatientRecordView = () => {
 
                   {Array.isArray(record.medications) && record.medications.length > 0 && (
                     <div className="mb-4">
-                      <p className="text-xs uppercase text-gray-400 font-semibold mb-2 flex items-center gap-2">
-                        <FaPills /> Prescribed Medications
-                      </p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs uppercase text-gray-400 font-semibold flex items-center gap-2">
+                          <FaPills /> Prescribed Medications
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handlePrintPrescription(record)}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium bg-[#31694E] text-white hover:bg-[#27543e] transition"
+                        >
+                          <FaPrint />
+                          Print Prescription
+                        </button>
+                      </div>
                       <div className="space-y-2">
                         {record.medications.map((med, index) => (
                           <div
