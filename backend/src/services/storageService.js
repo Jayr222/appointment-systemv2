@@ -56,6 +56,9 @@ export const uploadToStorage = async (fileBuffer, filename, mimeType, folder = '
     console.log('   Buffer size:', fileBuffer.length);
     
     return new Promise((resolve, reject) => {
+      let timeout;
+      let finished = false;
+
       const uploadStream = bucket.openUploadStreamWithId(fileId, uploadFilename, {
         contentType: mimeType,
         metadata: {
@@ -65,27 +68,77 @@ export const uploadToStorage = async (fileBuffer, filename, mimeType, folder = '
         }
       });
 
+      // Set a timeout to prevent hanging (30 seconds)
+      timeout = setTimeout(() => {
+        if (!finished) {
+          finished = true;
+          console.error('⏱️ GridFS upload timeout after 30 seconds');
+          uploadStream.destroy();
+          reject(new Error('GridFS upload timeout - file may be too large or connection is slow'));
+        }
+      }, 30000);
+
       uploadStream.on('finish', () => {
-        // Return a URL that can be used to retrieve the file
-        const url = `/api/storage/avatars/${fileId.toString()}`;
-        console.log('✅ GridFS upload finished:', url);
-        resolve({
-          url: url,
-          fileId: fileId.toString(),
-          storageType: STORAGE_TYPES.MONGODB_GRIDFS
-        });
+        if (!finished) {
+          finished = true;
+          clearTimeout(timeout);
+          // Return a URL that can be used to retrieve the file
+          const url = `/api/storage/avatars/${fileId.toString()}`;
+          console.log('✅ GridFS upload finished:', url);
+          resolve({
+            url: url,
+            fileId: fileId.toString(),
+            storageType: STORAGE_TYPES.MONGODB_GRIDFS
+          });
+        }
       });
 
       uploadStream.on('error', (error) => {
-        console.error('❌ GridFS upload stream error:', error);
-        console.error('   Error message:', error.message);
-        console.error('   Error stack:', error.stack);
-        reject(error);
+        if (!finished) {
+          finished = true;
+          clearTimeout(timeout);
+          console.error('❌ GridFS upload stream error:', error);
+          console.error('   Error message:', error.message);
+          console.error('   Error stack:', error.stack);
+          reject(error);
+        }
       });
 
+      // Handle stream close event as a fallback
+      uploadStream.on('close', () => {
+        console.log('🔒 GridFS upload stream closed');
+      });
+
+      // Write the buffer - use end() which writes and closes the stream
       console.log('📝 Writing buffer to GridFS stream...');
-      uploadStream.end(fileBuffer);
-      console.log('✅ Buffer written to stream, waiting for finish event...');
+      
+      // For small buffers (< 16KB), write directly
+      // For larger buffers, use write() + end() pattern
+      if (fileBuffer.length < 16 * 1024) {
+        // Small buffer - use end() directly
+        console.log('   Small buffer, using end() directly...');
+        uploadStream.end(fileBuffer);
+      } else {
+        // Larger buffer - write in chunks or use write() + end()
+        console.log('   Large buffer, writing then ending...');
+        const writeSuccess = uploadStream.write(fileBuffer);
+        console.log('   Write immediate success:', writeSuccess);
+        
+        if (!writeSuccess) {
+          // Stream is buffering - wait for drain event
+          console.log('   Stream is buffering, waiting for drain event...');
+          uploadStream.once('drain', () => {
+            console.log('   Stream drained, ending stream...');
+            uploadStream.end();
+          });
+        } else {
+          // Write was successful, end the stream immediately
+          console.log('   Write successful, ending stream...');
+          uploadStream.end();
+        }
+      }
+      
+      console.log('✅ Buffer write initiated, waiting for finish event...');
     });
   } catch (error) {
     console.error('❌ Storage upload error:', error);
