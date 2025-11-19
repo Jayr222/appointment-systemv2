@@ -100,3 +100,26 @@ export const emitNewMessage = (receiverId, message) => {
   }
 };
 
+export const emitAvailabilityUpdate = (doctorId, data) => {
+  if (!ioInstance) {
+    console.warn('Socket.IO instance not set. Availability updates will not be broadcast.');
+    return;
+  }
+
+  try {
+    // Broadcast to all connected clients that a doctor's availability has changed
+    ioInstance.emit('doctor-availability-updated', {
+      doctorId,
+      ...data
+    });
+    
+    // Also emit to specific doctor room
+    ioInstance.to(`doctor-${doctorId}`).emit('doctor-availability-updated', {
+      doctorId,
+      ...data
+    });
+  } catch (error) {
+    console.error('Error emitting availability update:', error);
+  }
+};
+

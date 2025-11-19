@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import patientService from '../../services/patientService';
 import { useNavigate, Link } from 'react-router-dom';
 import { FaExclamationTriangle, FaInfoCircle, FaChevronDown, FaChevronUp, FaEdit, FaCheckCircle, FaTimes } from 'react-icons/fa';
@@ -97,6 +98,45 @@ const BookAppointment = () => {
     saveFormData(formData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
+
+  // Socket.IO connection for real-time availability updates
+  useEffect(() => {
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const socket = io(API_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
+
+    // Listen for doctor availability updates
+    socket.on('doctor-availability-updated', (data) => {
+      // If this update is for the currently selected doctor, refresh available slots
+      if (data.doctorId === formData.doctor && formData.appointmentDate) {
+        console.log('Doctor availability updated, refreshing time slots...');
+        
+        // Refresh the available slots
+        fetchAvailableSlots(formData.doctor, formData.appointmentDate);
+        
+        // Show notification to user
+        const selectedDoctor = doctors.find(d => d._id === formData.doctor);
+        const doctorName = selectedDoctor ? selectedDoctor.name : 'Your selected doctor';
+        
+        addNotification({
+          type: 'info',
+          title: 'Schedule Updated',
+          message: `${doctorName}'s availability has been updated. Available time slots have been refreshed.`,
+          showBrowserNotification: false
+        });
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      socket.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.doctor, formData.appointmentDate, doctors]);
 
   const fetchMedicalHistory = async () => {
     setLoadingMedicalHistory(true);

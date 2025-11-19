@@ -1,5 +1,6 @@
 import DoctorAvailability from '../models/DoctorAvailability.js';
 import { logActivity } from '../services/loggingService.js';
+import { emitAvailabilityUpdate } from '../utils/socketEmitter.js';
 
 // @desc    Get doctor's unavailability schedule
 // @route   GET /api/doctor/availability
@@ -77,6 +78,12 @@ export const markUnavailable = async (req, res) => {
     await logActivity(req.user.id, 'mark_unavailable', 'doctor_availability', 
       `Marked doctor unavailable from ${startDate} to ${endDate}`);
 
+    // Emit socket event to notify all clients
+    emitAvailabilityUpdate(doctorId, {
+      action: 'marked_unavailable',
+      unavailability
+    });
+
     res.status(201).json({
       success: true,
       unavailability
@@ -109,6 +116,12 @@ export const removeUnavailability = async (req, res) => {
     // Log activity
     await logActivity(req.user.id, 'remove_unavailability', 'doctor_availability', 
       'Removed doctor unavailability');
+
+    // Emit socket event to notify all clients
+    emitAvailabilityUpdate(unavailability.doctor.toString(), {
+      action: 'removed_unavailability',
+      unavailabilityId: req.params.id
+    });
 
     res.json({
       success: true,
@@ -149,6 +162,12 @@ export const updateUnavailability = async (req, res) => {
     // Log activity
     await logActivity(req.user.id, 'update_unavailability', 'doctor_availability', 
       'Updated doctor unavailability');
+
+    // Emit socket event to notify all clients
+    emitAvailabilityUpdate(unavailability.doctor.toString(), {
+      action: 'updated_unavailability',
+      unavailability
+    });
 
     res.json({
       success: true,

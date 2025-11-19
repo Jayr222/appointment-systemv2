@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import doctorService from '../../services/doctorService';
 import doctorAvailabilityService from '../../services/doctorAvailabilityService';
+import { useAuth } from '../../hooks/useAuth';
+import { FaExclamationTriangle, FaInfoCircle, FaClock, FaCalendarTimes, FaTimes, FaCheck } from 'react-icons/fa';
 
 const ScheduleManagement = () => {
+  const { user } = useAuth();
   const [schedule, setSchedule] = useState([]);
   const [unavailabilities, setUnavailabilities] = useState([]);
   const [breakTimes, setBreakTimes] = useState([]);
@@ -35,6 +39,33 @@ const ScheduleManagement = () => {
     fetchAvailability();
     fetchBreakTimes();
   }, []);
+
+  // Socket.IO connection for real-time availability updates
+  useEffect(() => {
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const socket = io(API_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
+
+    // Listen for doctor availability updates
+    socket.on('doctor-availability-updated', (data) => {
+      // If this update is for the current doctor, refresh availability
+      if (user && data.doctorId === user.id) {
+        console.log('Your availability has been updated, refreshing...');
+        fetchAvailability();
+        fetchSchedule(); // Also refresh appointments in case slots changed
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      socket.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const fetchSchedule = async () => {
     try {
@@ -311,27 +342,47 @@ const ScheduleManagement = () => {
             </div>
 
             {showUnavailableForm && (
-              <form onSubmit={handleMarkUnavailable} className="space-y-4">
+              <form onSubmit={handleMarkUnavailable} className="space-y-6">
+                {/* Important Notice */}
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                  <div className="flex items-start gap-3">
+                    <FaInfoCircle className="text-blue-500 text-xl mt-0.5 flex-shrink-0" />
+                    <div className="text-sm">
+                      <p className="font-semibold text-blue-900 mb-1">What happens when you mark unavailable?</p>
+                      <ul className="text-blue-800 space-y-1 list-disc list-inside">
+                        <li>Patients will NOT see these time slots when booking appointments</li>
+                        <li>Existing appointments during this period will NOT be cancelled</li>
+                        <li>You can add specific time ranges or mark entire day(s) as unavailable</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Date Selection */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                      <FaCalendarTimes className="text-gray-500" />
+                      Start Date <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="date"
                       required
+                      min={new Date().toISOString().split('T')[0]}
                       value={formData.startDate}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      End Date
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                      <FaCalendarTimes className="text-gray-500" />
+                      End Date <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="date"
                       required
+                      min={formData.startDate || new Date().toISOString().split('T')[0]}
                       value={formData.endDate}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -339,9 +390,10 @@ const ScheduleManagement = () => {
                   </div>
                 </div>
 
+                {/* Reason Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Reason
+                    Reason <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.reason}
@@ -358,122 +410,237 @@ const ScheduleManagement = () => {
                   </select>
                 </div>
 
+                {/* Description */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description (Optional)
+                    Description <span className="text-gray-500 text-xs">(Optional)</span>
                   </label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows="3"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Additional details..."
+                    placeholder="Additional details about your unavailability..."
                   />
                 </div>
 
-                <div className="border-t pt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Specific Time Slots (Optional - Leave empty for full day unavailability)
-                  </label>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="time"
-                      value={timeSlot.startTime}
-                      onChange={(e) => setTimeSlot({ ...timeSlot, startTime: e.target.value })}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Start Time"
-                    />
-                    <input
-                      type="time"
-                      value={timeSlot.endTime}
-                      onChange={(e) => setTimeSlot({ ...timeSlot, endTime: e.target.value })}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="End Time"
-                    />
-                    <button
-                      type="button"
-                      onClick={addTimeSlot}
-                      className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                    >
-                      Add Time Slot
-                    </button>
+                {/* Time Slots Section */}
+                <div className="border-t border-gray-200 pt-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <FaClock className="text-gray-500" />
+                      Specific Time Slots <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+                    </label>
                   </div>
+                  
+                  {/* Warning for time slots */}
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-r-lg mb-4">
+                    <div className="flex items-start gap-2">
+                      <FaExclamationTriangle className="text-yellow-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-yellow-800">
+                        <p className="font-semibold mb-1">Leave empty to block entire day(s)</p>
+                        <p>Add time slots only if you want to be unavailable during specific hours (e.g., 8:00 AM - 11:30 AM)</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Add Time Slot Input */}
+                  <div className="bg-gray-50 p-4 rounded-lg mb-3">
+                    <p className="text-sm font-medium text-gray-700 mb-3">Add Time Range</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="time"
+                        value={timeSlot.startTime}
+                        onChange={(e) => setTimeSlot({ ...timeSlot, startTime: e.target.value })}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Start Time"
+                      />
+                      <span className="flex items-center text-gray-500">to</span>
+                      <input
+                        type="time"
+                        value={timeSlot.endTime}
+                        onChange={(e) => setTimeSlot({ ...timeSlot, endTime: e.target.value })}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="End Time"
+                      />
+                      <button
+                        type="button"
+                        onClick={addTimeSlot}
+                        disabled={!timeSlot.startTime || !timeSlot.endTime}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        <FaCheck /> Add
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Display Added Time Slots */}
                   {formData.unavailableTimes.length > 0 && (
                     <div className="space-y-2">
+                      <p className="text-sm font-medium text-gray-700 mb-2">Unavailable Time Slots:</p>
                       {formData.unavailableTimes.map((slot, index) => (
-                        <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                          <span className="text-sm">
-                            {slot.startTime} - {slot.endTime}
-                          </span>
+                        <div key={index} className="flex items-center justify-between bg-red-50 border border-red-200 p-3 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <FaClock className="text-red-500" />
+                            <span className="text-sm font-medium text-red-900">
+                              {slot.startTime} - {slot.endTime}
+                            </span>
+                            <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
+                              Patients cannot book during this time
+                            </span>
+                          </div>
                           <button
                             type="button"
                             onClick={() => removeTimeSlot(index)}
-                            className="text-red-600 hover:text-red-800 text-sm"
+                            className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded-full transition-colors"
+                            title="Remove time slot"
                           >
-                            Remove
+                            <FaTimes />
                           </button>
                         </div>
                       ))}
                     </div>
                   )}
+                  
+                  {formData.unavailableTimes.length === 0 && (
+                    <div className="text-center py-4 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg">
+                      <FaCalendarTimes className="text-gray-400 text-3xl mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">
+                        No specific time slots added. Entire day(s) will be marked as unavailable.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Mark Unavailable
-                </button>
+                {/* Submit Button */}
+                <div className="border-t pt-4">
+                  <button
+                    type="submit"
+                    className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <FaCalendarTimes /> Mark as Unavailable
+                  </button>
+                </div>
               </form>
             )}
           </div>
 
           {/* Current Unavailabilities */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Current Unavailabilities</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <FaCalendarTimes className="text-gray-600" />
+                Current Unavailabilities
+              </h2>
+              {unavailabilities.length > 0 && (
+                <span className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">
+                  {unavailabilities.length} period{unavailabilities.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            
             {unavailabilities.length === 0 ? (
-              <p className="text-gray-600">No unavailability periods marked</p>
+              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                <FaInfoCircle className="text-gray-400 text-4xl mx-auto mb-3" />
+                <p className="text-gray-600 font-medium">No unavailability periods marked</p>
+                <p className="text-sm text-gray-500 mt-1">Patients can book appointments at any available time</p>
+              </div>
             ) : (
               <div className="space-y-4">
                 {unavailabilities.map((unavailability) => (
                   <div
                     key={unavailability._id}
-                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className="border-l-4 border-red-500 bg-red-50 rounded-r-lg p-4 hover:shadow-md transition-shadow"
                   >
                     <div className="flex justify-between items-start">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="px-3 py-1 bg-red-600 text-white text-xs font-semibold rounded-full">
                             {getReasonLabel(unavailability.reason)}
                           </span>
+                          {unavailability.unavailableTimes && unavailability.unavailableTimes.length > 0 ? (
+                            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full flex items-center gap-1">
+                              <FaClock className="text-xs" /> Specific Times Only
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 bg-red-200 text-red-900 text-xs rounded-full flex items-center gap-1">
+                              <FaCalendarTimes className="text-xs" /> Full Day(s)
+                            </span>
+                          )}
                         </div>
-                        <p className="text-sm text-gray-600">
-                          <strong>From:</strong> {new Date(unavailability.startDate).toLocaleDateString()}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          <strong>To:</strong> {new Date(unavailability.endDate).toLocaleDateString()}
-                        </p>
+                        
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-3">
+                          <div className="flex items-center gap-2">
+                            <FaCalendarTimes className="text-red-600" />
+                            <div>
+                              <p className="text-xs text-gray-600 font-medium">From:</p>
+                              <p className="text-sm text-gray-900 font-semibold">
+                                {new Date(unavailability.startDate).toLocaleDateString('en-US', { 
+                                  weekday: 'short', 
+                                  month: 'short', 
+                                  day: 'numeric', 
+                                  year: 'numeric' 
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <FaCalendarTimes className="text-red-600" />
+                            <div>
+                              <p className="text-xs text-gray-600 font-medium">To:</p>
+                              <p className="text-sm text-gray-900 font-semibold">
+                                {new Date(unavailability.endDate).toLocaleDateString('en-US', { 
+                                  weekday: 'short', 
+                                  month: 'short', 
+                                  day: 'numeric', 
+                                  year: 'numeric' 
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
                         {unavailability.description && (
-                          <p className="text-sm text-gray-700 mt-2">{unavailability.description}</p>
-                        )}
-                        {unavailability.unavailableTimes && unavailability.unavailableTimes.length > 0 && (
-                          <div className="mt-2">
-                            <p className="text-sm font-medium text-gray-700">Unavailable Times:</p>
-                            <ul className="text-sm text-gray-600 list-disc list-inside">
-                              {unavailability.unavailableTimes.map((slot, index) => (
-                                <li key={index}>
-                                  {slot.startTime} - {slot.endTime}
-                                </li>
-                              ))}
-                            </ul>
+                          <div className="bg-white p-3 rounded-lg border border-red-200 mb-3">
+                            <p className="text-sm text-gray-700 italic">{unavailability.description}</p>
                           </div>
                         )}
+                        
+                        {unavailability.unavailableTimes && unavailability.unavailableTimes.length > 0 && (
+                          <div className="bg-white p-3 rounded-lg border border-red-200">
+                            <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                              <FaClock className="text-red-600" />
+                              Blocked Time Slots:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {unavailability.unavailableTimes.map((slot, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full"
+                                >
+                                  <FaTimes className="text-red-600" />
+                                  {slot.startTime} - {slot.endTime}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Warning notice */}
+                        <div className="mt-3 flex items-start gap-2 bg-yellow-50 border border-yellow-200 p-2 rounded">
+                          <FaExclamationTriangle className="text-yellow-600 text-xs mt-0.5 flex-shrink-0" />
+                          <p className="text-xs text-yellow-800">
+                            Patients cannot book {unavailability.unavailableTimes?.length > 0 ? 'during these specific times' : 'on these days'}
+                          </p>
+                        </div>
                       </div>
+                      
                       <button
                         onClick={() => handleRemoveUnavailability(unavailability._id)}
-                        className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                        className="ml-4 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                        title="Remove this unavailability period"
                       >
-                        Remove
+                        <FaTimes /> Remove
                       </button>
                     </div>
                   </div>
