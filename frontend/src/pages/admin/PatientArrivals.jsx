@@ -556,6 +556,9 @@ const PatientArrivals = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                     placeholder="patient@email.com"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Please use a real Gmail account for email notifications.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

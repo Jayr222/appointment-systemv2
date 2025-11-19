@@ -315,6 +315,45 @@ export const updateFollowUp = async (req, res) => {
   }
 };
 
+// @desc    Search patients
+// @route   GET /api/nurse/patients/search
+// @access  Private (Nurse)
+export const searchPatients = async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || query.trim().length < 2) {
+      return res.json({
+        success: true,
+        patients: []
+      });
+    }
+
+    const searchRegex = new RegExp(query.trim(), 'i');
+    
+    const patients = await User.find({
+      role: 'patient',
+      $or: [
+        { name: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+        { _id: query.trim() } // Direct ID match
+      ]
+    })
+      .select('_id name email phone dateOfBirth gender')
+      .limit(10)
+      .sort({ name: 1 });
+
+    res.json({
+      success: true,
+      patients
+    });
+  } catch (error) {
+    console.error('Search patients error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // @desc    Get patient info
 // @route   GET /api/nurse/patients/:id
 // @access  Private (Nurse)

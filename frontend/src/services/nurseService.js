@@ -11,6 +11,13 @@ export const nurseService = {
     return response.data;
   },
 
+  searchPatients: async (query) => {
+    const response = await api.get('/nurse/patients/search', {
+      params: { query }
+    });
+    return response.data;
+  },
+
   getPatientInfo: async (patientId) => {
     const response = await api.get(`/nurse/patients/${patientId}`);
     return response.data;

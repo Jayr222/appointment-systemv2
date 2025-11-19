@@ -7,7 +7,8 @@ import {
   createFollowUp,
   getFollowUps,
   updateFollowUp,
-  getPatientInfo
+  getPatientInfo,
+  searchPatients
 } from '../controllers/nurseController.js';
 import { nurseOnly } from '../middleware/nurseOnly.js';
 
@@ -18,6 +19,7 @@ router.use(nurseOnly);
 
 router.get('/dashboard', getDashboard);
 router.get('/queue', getTodayQueue);
+router.get('/patients/search', searchPatients); // Must be before :id route
 router.get('/patients/:id', getPatientInfo);
 
 // Vital Signs

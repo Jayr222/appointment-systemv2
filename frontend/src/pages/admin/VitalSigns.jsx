@@ -161,12 +161,22 @@ const VitalSigns = () => {
     }
   };
 
-  const filteredPatients = patients.filter(patient =>
-    patient.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    patient.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    patient.phone?.includes(searchQuery) ||
-    patient._id?.includes(searchQuery)
-  );
+  const filteredPatients = patients.filter(patient => {
+    if (!searchQuery.trim()) {
+      return true; // Show all patients if search is empty
+    }
+    
+    const query = searchQuery.toLowerCase().trim();
+    const name = patient.name?.toLowerCase() || '';
+    const email = patient.email?.toLowerCase() || '';
+    const phone = patient.phone?.toLowerCase() || '';
+    const id = patient._id?.toLowerCase() || '';
+    
+    return name.includes(query) ||
+           email.includes(query) ||
+           phone.includes(query) ||
+           id.includes(query);
+  });
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -213,16 +223,27 @@ const VitalSigns = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
                   required
                 >
-                  <option value="">Select a patient</option>
+                  <option value="">
+                    {searchQuery.trim() 
+                      ? filteredPatients.length === 0 
+                        ? 'No patients found' 
+                        : `Select a patient (${filteredPatients.length} found)`
+                      : 'Select a patient'}
+                  </option>
                   {filteredPatients.map((patient) => (
                     <option key={patient._id} value={patient._id}>
-                      {patient.name} - {patient.email} - {patient.phone}
+                      {patient.name} - {patient.email || 'No email'} - {patient.phone || 'No phone'}
                     </option>
                   ))}
                 </select>
                 {formData.patientId && (
                   <p className="text-xs text-gray-500 mt-1">
                     Selected: {patients.find(p => p._id === formData.patientId)?.name || formData.patientId}
+                  </p>
+                )}
+                {searchQuery.trim() && filteredPatients.length === 0 && (
+                  <p className="text-xs text-red-500 mt-1">
+                    No patients found matching &quot;{searchQuery}&quot;
                   </p>
                 )}
               </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FaHeartbeat, FaSave, FaHistory, FaTimes, FaSearch, FaPlus } from 'react-icons/fa';
 import nurseService from '../../services/nurseService';
@@ -6,6 +6,7 @@ import { useNotifications } from '../../context/NotificationContext';
 
 const VitalSigns = () => {
   const [searchParams] = useSearchParams();
+  const searchRef = useRef(null);
   const [formData, setFormData] = useState({
     patientId: searchParams.get('patientId') || '',
     appointmentId: '',
@@ -26,6 +27,10 @@ const VitalSigns = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState(null);
   const [showSymptomModal, setShowSymptomModal] = useState(false);
   const [symptomInput, setSymptomInput] = useState('');
   const { addNotification } = useNotifications();
@@ -36,6 +41,44 @@ const VitalSigns = () => {
     }
   }, [formData.patientId]);
 
+  // Search patients with debouncing
+  useEffect(() => {
+    const searchDebounceTimer = setTimeout(async () => {
+      if (searchQuery.trim().length >= 2) {
+        setSearchLoading(true);
+        try {
+          const response = await nurseService.searchPatients(searchQuery);
+          setSearchResults(response.patients || []);
+          setShowSearchDropdown(true);
+        } catch (error) {
+          console.error('Error searching patients:', error);
+          setSearchResults([]);
+        } finally {
+          setSearchLoading(false);
+        }
+      } else {
+        setSearchResults([]);
+        setShowSearchDropdown(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(searchDebounceTimer);
+  }, [searchQuery]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSearchDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const fetchVitalSignsHistory = async () => {
     try {
       const response = await nurseService.getPatientVitalSigns(formData.patientId);
@@ -43,6 +86,14 @@ const VitalSigns = () => {
     } catch (error) {
       console.error('Error fetching vital signs history:', error);
     }
+  };
+
+  const handleSelectPatient = (patient) => {
+    setSelectedPatient(patient);
+    setFormData({ ...formData, patientId: patient._id });
+    setSearchQuery('');
+    setShowSearchDropdown(false);
+    setSearchResults([]);
   };
 
   const handleChange = (e) => {
@@ -123,7 +174,7 @@ const VitalSigns = () => {
         showBrowserNotification: true
       });
       
-      // Reset form
+      // Reset form but keep patient selected
       setFormData({
         patientId: formData.patientId,
         appointmentId: '',
@@ -138,6 +189,7 @@ const VitalSigns = () => {
         symptoms: [],
         painLevel: ''
       });
+      // Keep selectedPatient so it remains visible
       
       fetchVitalSignsHistory();
     } catch (error) {
@@ -171,22 +223,87 @@ const VitalSigns = () => {
           <div className="bg-white rounded-lg shadow-md p-6 border">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Patient Selection */}
-              <div>
+              <div className="relative" ref={searchRef}>
                 <label className="block text-gray-700 text-sm font-bold mb-2">
                   Patient <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={formData.patientId}
-                  onChange={(e) => {
-                    setFormData({ ...formData, patientId: e.target.value });
-                    setSearchQuery('');
-                  }}
-                  placeholder="Patient ID"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter patient ID or select from queue</p>
+                
+                {selectedPatient ? (
+                  <div className="flex items-center justify-between p-3 bg-green-50 border-2 border-green-500 rounded-lg">
+                    <div>
+                      <p className="font-semibold text-gray-800">{selectedPatient.name}</p>
+                      <p className="text-sm text-gray-600">{selectedPatient.email}</p>
+                      {selectedPatient.phone && (
+                        <p className="text-sm text-gray-600">{selectedPatient.phone}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPatient(null);
+                        setFormData({ ...formData, patientId: '' });
+                      }}
+                      className="text-red-500 hover:text-red-700 transition-colors"
+                    >
+                      <FaTimes className="text-xl" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FaSearch className="text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onFocus={() => {
+                          if (searchResults.length > 0) {
+                            setShowSearchDropdown(true);
+                          }
+                        }}
+                        placeholder="Search by name, email, phone, or ID..."
+                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
+                      />
+                    </div>
+                    
+                    {/* Search Dropdown */}
+                    {showSearchDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {searchLoading ? (
+                          <div className="p-4 text-center text-gray-600">
+                            <FaSearch className="animate-spin inline mr-2" />
+                            Searching...
+                          </div>
+                        ) : searchResults.length > 0 ? (
+                          searchResults.map((patient) => (
+                            <button
+                              key={patient._id}
+                              type="button"
+                              onClick={() => handleSelectPatient(patient)}
+                              className="w-full text-left px-4 py-3 hover:bg-gray-100 border-b last:border-b-0 transition-colors"
+                            >
+                              <p className="font-semibold text-gray-800">{patient.name}</p>
+                              <p className="text-sm text-gray-600">{patient.email}</p>
+                              {patient.phone && (
+                                <p className="text-sm text-gray-600">{patient.phone}</p>
+                              )}
+                            </button>
+                          ))
+                        ) : searchQuery.length >= 2 ? (
+                          <div className="p-4 text-center text-gray-600">
+                            No patients found
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                    
+                    <p className="text-xs text-gray-500 mt-1">
+                      Type at least 2 characters to search for a patient
+                    </p>
+                  </>
+                )}
               </div>
 
               {/* Blood Pressure */}
