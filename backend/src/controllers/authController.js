@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import path from 'path';
 import fs from 'fs/promises';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import { generateToken } from '../utils/generateToken.js';
 import { logActivity, logError } from '../services/loggingService.js';
@@ -641,29 +642,48 @@ export const resetPassword = async (req, res) => {
     
     console.log('✅ User found, resetting password for:', user.email);
 
-    // Set new password - mark as modified to ensure pre-save hook hashes it
-    user.password = password;
-    user.markModified('password'); // Explicitly mark password as modified
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    user.lastPasswordChange = new Date(); // Update last password change timestamp
+    // Manually hash the password to ensure it's hashed
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
     
-    console.log('💾 Saving new password...');
-    const savedUser = await user.save();
+    console.log('🔐 Hashing password...', {
+      originalLength: password.length,
+      hashedLength: hashedPassword.length,
+      isHashed: hashedPassword.startsWith('$2')
+    });
+
+    // Use findByIdAndUpdate to bypass pre-save hook and set already-hashed password
+    // This prevents double-hashing
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      {
+        password: hashedPassword, // Already hashed, so pre-save hook won't hash again
+        resetPasswordToken: undefined,
+        resetPasswordExpire: undefined,
+        lastPasswordChange: new Date()
+      },
+      { 
+        new: true,
+        runValidators: false // Skip validators since password is already hashed
+      }
+    );
     
     // Verify password was saved and hashed
-    const verifyUser = await User.findById(savedUser._id).select('+password');
+    const verifyUser = await User.findById(updatedUser._id).select('+password');
     const isPasswordHashed = verifyUser.password && verifyUser.password.startsWith('$2'); // bcrypt hashes start with $2
     console.log('🔐 Password saved verification:', {
       hasPassword: !!verifyUser.password,
       isHashed: isPasswordHashed,
-      passwordLength: verifyUser.password?.length
+      passwordLength: verifyUser.password?.length,
+      passwordPreview: verifyUser.password?.substring(0, 20) + '...'
     });
     
     if (!isPasswordHashed) {
       console.error('❌ CRITICAL: Password was not hashed!');
       return res.status(500).json({ message: 'Failed to save password. Please try again.' });
     }
+    
+    console.log('✅ Password reset successful for:', updatedUser.email);
 
     res.status(200).json({
       success: true,
