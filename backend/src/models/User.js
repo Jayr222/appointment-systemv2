@@ -193,6 +193,15 @@ const userSchema = new mongoose.Schema({
   },
   lastPasswordChange: {
     type: Date
+  },
+  lastEmailChange: {
+    type: Date
+  },
+  resetPasswordToken: {
+    type: String
+  },
+  resetPasswordExpire: {
+    type: Date
   }
 }, {
   timestamps: true
