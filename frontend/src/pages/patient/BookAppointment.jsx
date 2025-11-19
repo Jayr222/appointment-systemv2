@@ -25,6 +25,8 @@ const BookAppointment = () => {
   const [slotError, setSlotError] = useState('');
   const [submitCooldown, setSubmitCooldown] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedSlotUnavailable, setSelectedSlotUnavailable] = useState(false);
+  const [checkingSlotAvailability, setCheckingSlotAvailability] = useState(false);
   const navigate = useNavigate();
   const { addNotification } = useNotifications();
 
@@ -64,7 +66,7 @@ const BookAppointment = () => {
     }
   };
 
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
@@ -76,8 +78,52 @@ const BookAppointment = () => {
       if (name === 'doctor') {
         // Reset time when doctor changes
         setFormData(prev => ({ ...prev, appointmentTime: '' }));
+        setSelectedSlotUnavailable(false);
       }
       fetchAvailableSlots(name === 'doctor' ? value : formData.doctor, name === 'appointmentDate' ? value : formData.appointmentDate);
+    }
+
+    // If time slot is selected, check availability in real-time
+    if (name === 'appointmentTime' && value) {
+      // Use formData values (doctor and date should already be set)
+      const currentDoctor = formData.doctor;
+      const currentDate = formData.appointmentDate;
+      
+      if (currentDoctor && currentDate) {
+        setCheckingSlotAvailability(true);
+        setSelectedSlotUnavailable(false);
+        
+        try {
+          // Re-fetch available slots to check if the selected slot is still available
+          const response = await patientService.getAvailableSlots(currentDoctor, currentDate);
+          
+          if (response.success && response.slots) {
+            const isStillAvailable = response.slots.includes(value);
+            
+            if (!isStillAvailable) {
+              // Selected slot is no longer available
+              setSelectedSlotUnavailable(true);
+              setFormData(prev => ({ ...prev, appointmentTime: '' })); // Clear selected time
+              addNotification({
+                type: 'error',
+                title: 'Time Slot Unavailable',
+                message: `The time slot "${value}" has just been taken by another patient. Please select another available time.`,
+                showBrowserNotification: true
+              });
+              
+              // Update available slots
+              setAvailableSlots(response.slots || []);
+            } else {
+              // Slot is still available - update the list to reflect current state
+              setAvailableSlots(response.slots || []);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking slot availability:', error);
+        } finally {
+          setCheckingSlotAvailability(false);
+        }
+      }
     }
   };
 
@@ -124,8 +170,34 @@ const BookAppointment = () => {
     setError('');
     setLoading(true);
     setIsSubmitting(true);
+    setSelectedSlotUnavailable(false);
 
     try {
+      // Final availability check before submitting
+      if (formData.doctor && formData.appointmentDate && formData.appointmentTime) {
+        const response = await patientService.getAvailableSlots(formData.doctor, formData.appointmentDate);
+        
+        if (response.success && response.slots) {
+          const isStillAvailable = response.slots.includes(formData.appointmentTime);
+          
+          if (!isStillAvailable) {
+            // Slot is no longer available - refresh slots and show error
+            setAvailableSlots(response.slots || []);
+            setFormData(prev => ({ ...prev, appointmentTime: '' }));
+            setError(`The time slot "${formData.appointmentTime}" has just been taken by another patient. Please select another available time from the updated list.`);
+            setLoading(false);
+            setIsSubmitting(false);
+            addNotification({
+              type: 'error',
+              title: 'Time Slot Unavailable',
+              message: `The time slot "${formData.appointmentTime}" has just been taken. Please select another time.`,
+              showBrowserNotification: true
+            });
+            return;
+          }
+        }
+      }
+
       const response = await patientService.bookAppointment(formData);
       
       // Get doctor name for the success message
@@ -179,7 +251,22 @@ const BookAppointment = () => {
       }, 500);
       
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Failed to book appointment';
+      let errorMessage = err.response?.data?.message || 'Failed to book appointment';
+      
+      // Handle slot unavailable error specifically
+      if (err.response?.status === 400 && (
+        errorMessage.includes('time slot') || 
+        errorMessage.includes('taken') || 
+        errorMessage.includes('not available')
+      )) {
+        // Refresh available slots when slot is unavailable
+        if (formData.doctor && formData.appointmentDate) {
+          fetchAvailableSlots(formData.doctor, formData.appointmentDate);
+        }
+        setFormData(prev => ({ ...prev, appointmentTime: '' }));
+        setSelectedSlotUnavailable(true);
+      }
+      
       setError(errorMessage);
       
       // Handle rate limiting errors
@@ -280,21 +367,45 @@ const BookAppointment = () => {
                 Loading available time slots...
               </div>
             ) : availableSlots.length > 0 ? (
-              <select
-                id="appointmentTime"
-                name="appointmentTime"
-                value={formData.appointmentTime}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-              >
-                <option value="">Select an available time slot</option>
-                {availableSlots.map((slot, index) => (
-                  <option key={index} value={slot}>
-                    {slot}
-                  </option>
-                ))}
-              </select>
+              <div>
+                {checkingSlotAvailability && (
+                  <div className="mb-2 text-sm text-blue-600 flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    Checking availability...
+                  </div>
+                )}
+                <select
+                  id="appointmentTime"
+                  name="appointmentTime"
+                  value={formData.appointmentTime}
+                  onChange={handleChange}
+                  required
+                  disabled={checkingSlotAvailability}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-primary-500 ${
+                    selectedSlotUnavailable 
+                      ? 'border-red-500 bg-red-50' 
+                      : 'border-gray-300'
+                  } ${checkingSlotAvailability ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <option value="">Select an available time slot</option>
+                  {availableSlots.map((slot, index) => (
+                    <option key={index} value={slot}>
+                      {slot}
+                    </option>
+                  ))}
+                </select>
+                {selectedSlotUnavailable && (
+                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <div className="flex items-start">
+                      <FaExclamationTriangle className="text-red-600 mt-0.5 mr-2 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm text-red-700 font-semibold">Time slot no longer available</p>
+                        <p className="text-xs text-red-600 mt-1">This time slot has been taken by another patient. Please select a different time from the list above.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : formData.doctor && formData.appointmentDate ? (
               <div className="w-full px-3 py-2 border border-red-300 rounded-lg bg-red-50">
                 <p className="text-red-700 text-sm">
