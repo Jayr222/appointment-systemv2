@@ -18,12 +18,15 @@ const PatientRecordView = () => {
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [records, setRecords] = useState([]);
+  const [vitalSigns, setVitalSigns] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
+  const [loadingVitalSigns, setLoadingVitalSigns] = useState(false);
   const [error, setError] = useState('');
   const [recordError, setRecordError] = useState('');
   const [downloadingId, setDownloadingId] = useState(null);
   const [downloadErrors, setDownloadErrors] = useState({});
+  const [activeTab, setActiveTab] = useState('records'); // 'records' or 'vitals'
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -82,6 +85,28 @@ const PatientRecordView = () => {
     };
 
     fetchRecords();
+  }, [selectedPatientId]);
+
+  useEffect(() => {
+    const fetchVitalSigns = async () => {
+      if (!selectedPatientId) {
+        setVitalSigns([]);
+        return;
+      }
+
+      setLoadingVitalSigns(true);
+      try {
+        const response = await doctorService.getPatientVitalSigns(selectedPatientId);
+        setVitalSigns(response.vitalSigns || []);
+      } catch (err) {
+        console.error('Error fetching vital signs:', err);
+        setVitalSigns([]);
+      } finally {
+        setLoadingVitalSigns(false);
+      }
+    };
+
+    fetchVitalSigns();
   }, [selectedPatientId]);
 
   const handleDownloadRecord = async (record) => {
@@ -206,51 +231,90 @@ const PatientRecordView = () => {
         </div>
 
         <div className="lg:col-span-2 bg-white rounded-lg shadow-md border flex flex-col">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-                <FaNotesMedical /> Patient Visit History
-              </h2>
-              {selectedPatient ? (
-                <p className="text-sm text-gray-500">
-                  Showing medical records for {selectedPatient.name}
-                </p>
-              ) : (
-                <p className="text-sm text-gray-500">Select a patient to view records</p>
+          <div className="p-6 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                  {activeTab === 'records' ? (
+                    <>
+                      <FaNotesMedical /> Patient Visit History
+                    </>
+                  ) : (
+                    <>
+                      <FaHeartbeat /> Vital Signs
+                    </>
+                  )}
+                </h2>
+                {selectedPatient ? (
+                  <p className="text-sm text-gray-500 mt-1">
+                    {activeTab === 'records' 
+                      ? `Showing medical records for ${selectedPatient.name}`
+                      : `Showing vital signs for ${selectedPatient.name}`
+                    }
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500 mt-1">Select a patient to view records</p>
+                )}
+              </div>
+              {selectedPatient && (
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-gray-700">{selectedPatient.name}</p>
+                  <p className="text-xs text-gray-500">{selectedPatient.email}</p>
+                </div>
               )}
             </div>
             {selectedPatient && (
-              <div className="text-right">
-                <p className="text-sm font-semibold text-gray-700">{selectedPatient.name}</p>
-                <p className="text-xs text-gray-500">{selectedPatient.email}</p>
+              <div className="flex gap-2 border border-gray-200 rounded-lg overflow-hidden w-fit">
+                <button
+                  onClick={() => setActiveTab('records')}
+                  className={`px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 ${
+                    activeTab === 'records'
+                      ? 'bg-[#31694E] text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FaNotesMedical /> Records
+                </button>
+                <button
+                  onClick={() => setActiveTab('vitals')}
+                  className={`px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 ${
+                    activeTab === 'vitals'
+                      ? 'bg-[#31694E] text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FaHeartbeat /> Vital Signs
+                </button>
               </div>
             )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {recordError && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-                {recordError}
-              </div>
-            )}
+            {activeTab === 'records' ? (
+              <>
+                {recordError && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+                    {recordError}
+                  </div>
+                )}
 
-            {!recordError && loadingRecords && (
-              <div className="text-center text-gray-500 py-10">Loading records...</div>
-            )}
+                {!recordError && loadingRecords && (
+                  <div className="text-center text-gray-500 py-10">Loading records...</div>
+                )}
 
-            {!recordError && !loadingRecords && records.length === 0 && selectedPatient && (
-              <div className="text-center text-gray-500 py-10">
-                <FaClipboardList className="text-4xl mx-auto mb-3 text-primary-400" />
-                <p>No medical records available for this patient yet.</p>
-                <p className="text-sm mt-2">
-                  Create a record from an appointment to populate the visit history.
-                </p>
-              </div>
-            )}
+                {!recordError && !loadingRecords && records.length === 0 && selectedPatient && (
+                  <div className="text-center text-gray-500 py-10">
+                    <FaClipboardList className="text-4xl mx-auto mb-3 text-primary-400" />
+                    <p>No medical records available for this patient yet.</p>
+                    <p className="text-sm mt-2">
+                      Create a record from an appointment to populate the visit history.
+                    </p>
+                  </div>
+                )}
 
-            {!recordError &&
-              !loadingRecords &&
-              records.map((record) => (
+                {!recordError &&
+                  !loadingRecords &&
+                  records.map((record) => (
                 <div
                   key={record._id}
                   className="border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow"
@@ -431,12 +495,130 @@ const PatientRecordView = () => {
                     </div>
                   )}
                 </div>
-              ))}
+                  ))}
+              </>
+            ) : (
+              <>
+                {loadingVitalSigns && (
+                  <div className="text-center text-gray-500 py-10">Loading vital signs...</div>
+                )}
+
+                {!loadingVitalSigns && vitalSigns.length === 0 && selectedPatient && (
+                  <div className="text-center text-gray-500 py-10">
+                    <FaHeartbeat className="text-4xl mx-auto mb-3 text-primary-400" />
+                    <p className="text-lg font-semibold mb-2">No vital signs recorded</p>
+                    <p className="text-sm">No vital signs have been recorded for this patient yet.</p>
+                  </div>
+                )}
+
+                {!loadingVitalSigns && vitalSigns.map((vital, index) => (
+                  <div
+                    key={vital._id || index}
+                    className="bg-gray-50 border border-gray-200 rounded-lg p-6"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <FaHeartbeat className="text-[#31694E]" />
+                        Vital Signs Record
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {new Date(vital.createdAt).toLocaleDateString()} at{' '}
+                        {new Date(vital.createdAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                    {vital.recordedBy?.name && (
+                      <p className="text-xs text-gray-500 mb-4">
+                        Recorded by: {vital.recordedBy.name}
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {vital.bloodPressure?.systolic && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Blood Pressure</p>
+                          <p className="text-lg font-bold text-gray-800">
+                            {vital.bloodPressure.systolic}/{vital.bloodPressure.diastolic} mmHg
+                          </p>
+                        </div>
+                      )}
+                      {vital.heartRate && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Heart Rate</p>
+                          <p className="text-lg font-bold text-gray-800">{vital.heartRate} bpm</p>
+                        </div>
+                      )}
+                      {vital.temperature?.value && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Temperature</p>
+                          <p className="text-lg font-bold text-gray-800">
+                            {vital.temperature.value}°{vital.temperature.unit === 'Celsius' ? 'C' : 'F'}
+                          </p>
+                        </div>
+                      )}
+                      {vital.respiratoryRate && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Respiratory Rate</p>
+                          <p className="text-lg font-bold text-gray-800">{vital.respiratoryRate} /min</p>
+                        </div>
+                      )}
+                      {vital.oxygenSaturation && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Oxygen Saturation</p>
+                          <p className="text-lg font-bold text-gray-800">{vital.oxygenSaturation}%</p>
+                        </div>
+                      )}
+                      {vital.weight?.value && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Weight</p>
+                          <p className="text-lg font-bold text-gray-800">
+                            {vital.weight.value} {vital.weight.unit}
+                          </p>
+                        </div>
+                      )}
+                      {vital.height?.value && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Height</p>
+                          <p className="text-lg font-bold text-gray-800">
+                            {vital.height.value} {vital.height.unit}
+                          </p>
+                        </div>
+                      )}
+                      {vital.painLevel && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Pain Level</p>
+                          <p className="text-lg font-bold text-gray-800">{vital.painLevel}/10</p>
+                        </div>
+                      )}
+                    </div>
+                    {vital.symptoms && vital.symptoms.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 font-semibold uppercase mb-2">Symptoms</p>
+                        <div className="flex flex-wrap gap-2">
+                          {vital.symptoms.map((symptom, idx) => (
+                            <span
+                              key={idx}
+                              className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                            >
+                              {symptom}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {vital.notes && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 font-semibold uppercase mb-2">Notes</p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{vital.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
 
             {!selectedPatient && !loadingPatients && (
               <div className="text-center text-gray-500 py-10">
                 <FaUser className="text-4xl mx-auto mb-3 text-primary-400" />
-                <p>Select a patient from the list to view their visit history.</p>
+                <p>Select a patient from the list to view their {activeTab === 'records' ? 'visit history' : 'vital signs'}.</p>
               </div>
             )}
           </div>

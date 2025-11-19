@@ -79,6 +79,11 @@ export const doctorService = {
       notes: reason
     });
     return response.data;
+  },
+
+  getPatientVitalSigns: async (patientId) => {
+    const response = await api.get(`/doctor/patients/${patientId}/vital-signs`);
+    return response.data;
   }
 };
 
