@@ -5,9 +5,10 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import PatientDocument from '../models/PatientDocument.js';
 import ActivityLog from '../models/ActivityLog.js';
 import VitalSigns from '../models/VitalSigns.js';
+import Message from '../models/Message.js';
 import { logActivity } from '../services/loggingService.js';
 import { assignQueueNumber, getTodayQueue } from '../services/queueService.js';
-import { emitQueueUpdate } from '../utils/socketEmitter.js';
+import { emitQueueUpdate, emitNotification, emitNewMessage } from '../utils/socketEmitter.js';
 import { sendWalkInAppointmentEmail } from '../services/emailService.js';
 
 // @desc    Get admin dashboard stats
@@ -894,13 +895,134 @@ export const recordVitalSigns = async (req, res) => {
     await vitalSigns.populate('patient', 'name email');
     await vitalSigns.populate('recordedBy', 'name');
 
+    // Find the assigned doctor from the patient's most recent appointment
+    let assignedDoctor = null;
+    let relatedAppointment = null;
+
+    if (appointmentId) {
+      // If appointmentId is provided, use that appointment's doctor
+      relatedAppointment = await Appointment.findById(appointmentId).populate('doctor', 'name email');
+      if (relatedAppointment && relatedAppointment.doctor) {
+        assignedDoctor = relatedAppointment.doctor;
+      }
+    } else {
+      // Find the most recent appointment with a doctor for this patient
+      relatedAppointment = await Appointment.findOne({
+        patient: patientId,
+        doctor: { $exists: true },
+        status: { $in: ['pending', 'confirmed'] }
+      })
+        .populate('doctor', 'name email')
+        .sort({ appointmentDate: -1, createdAt: -1 });
+
+      if (relatedAppointment && relatedAppointment.doctor) {
+        assignedDoctor = relatedAppointment.doctor;
+        // Update vital signs to link to this appointment
+        vitalSigns.appointment = relatedAppointment._id;
+        await vitalSigns.save();
+      }
+    }
+
     // Log activity
     await logActivity(req.user.id, 'record_vital_signs', 'vital_signs', 
       `Recorded vital signs for ${vitalSigns.patient.name}`);
 
+    // Automatically send vital signs to the assigned doctor via message
+    if (assignedDoctor) {
+      try {
+        // Format vital signs for the message
+        const vitalSignsDetails = [];
+        if (bloodPressure?.systolic && bloodPressure?.diastolic) {
+          vitalSignsDetails.push(`Blood Pressure: ${bloodPressure.systolic}/${bloodPressure.diastolic} mmHg`);
+        }
+        if (heartRate) {
+          vitalSignsDetails.push(`Heart Rate: ${heartRate} bpm`);
+        }
+        if (temperature?.value) {
+          const unit = temperature.unit === 'Celsius' ? '°C' : '°F';
+          vitalSignsDetails.push(`Temperature: ${temperature.value}${unit}`);
+        }
+        if (respiratoryRate) {
+          vitalSignsDetails.push(`Respiratory Rate: ${respiratoryRate} /min`);
+        }
+        if (oxygenSaturation) {
+          vitalSignsDetails.push(`Oxygen Saturation: ${oxygenSaturation}%`);
+        }
+        if (weight?.value) {
+          vitalSignsDetails.push(`Weight: ${weight.value} ${weight.unit}`);
+        }
+        if (height?.value) {
+          vitalSignsDetails.push(`Height: ${height.value} ${height.unit}`);
+        }
+        if (painLevel !== undefined && painLevel !== null && painLevel !== '') {
+          vitalSignsDetails.push(`Pain Level: ${painLevel}/10`);
+        }
+        if (symptoms && symptoms.length > 0) {
+          vitalSignsDetails.push(`Symptoms: ${symptoms.join(', ')}`);
+        }
+        if (notes) {
+          vitalSignsDetails.push(`Notes: ${notes}`);
+        }
+
+        const messageContent = `Vital signs recorded for patient: ${vitalSigns.patient.name}\n\n` +
+          vitalSignsDetails.join('\n') +
+          (relatedAppointment ? `\n\nAppointment: ${new Date(relatedAppointment.appointmentDate).toLocaleDateString()} at ${relatedAppointment.appointmentTime}` : '') +
+          `\n\nRecorded by: ${vitalSigns.recordedBy.name}`;
+
+        // Create message to doctor
+        const message = await Message.create({
+          sender: req.user.id, // Admin who recorded the vital signs
+          receiver: assignedDoctor._id,
+          subject: `Vital Signs Recorded - ${vitalSigns.patient.name}`,
+          content: messageContent,
+          appointment: relatedAppointment?._id || null,
+          messageType: 'test-results'
+        });
+
+        await message.populate('sender', 'name email role avatar');
+        await message.populate('receiver', 'name email role avatar');
+
+        // Log activity for message
+        await logActivity(
+          req.user.id,
+          'send_message',
+          'message',
+          `Sent vital signs to Dr. ${assignedDoctor.name} for patient ${vitalSigns.patient.name}`
+        );
+
+        // Emit real-time notification and message to doctor
+        emitNotification(assignedDoctor._id, {
+          type: 'vital_signs_received',
+          title: 'New Vital Signs',
+          message: `Vital signs recorded for patient ${vitalSigns.patient.name}`,
+          data: { 
+            messageId: message._id,
+            patientId: patientId,
+            vitalSignsId: vitalSigns._id,
+            appointmentId: relatedAppointment?._id || null
+          }
+        });
+
+        emitNewMessage(assignedDoctor._id, {
+          message: message.toObject(),
+          sender: req.user.name
+        });
+
+        console.log(`✅ Vital signs sent to Dr. ${assignedDoctor.name} for patient ${vitalSigns.patient.name}`);
+      } catch (messageError) {
+        // Don't fail the vital signs recording if message fails
+        console.error('Error sending vital signs message to doctor:', messageError);
+      }
+    } else {
+      console.log(`⚠️ No assigned doctor found for patient ${vitalSigns.patient.name}. Vital signs recorded but not sent to doctor.`);
+    }
+
     res.status(201).json({
       success: true,
-      vitalSigns
+      vitalSigns,
+      message: assignedDoctor 
+        ? `Vital signs recorded and sent to Dr. ${assignedDoctor.name}`
+        : 'Vital signs recorded. No assigned doctor found to notify.'
     });
   } catch (error) {
     console.error('Record vital signs error:', error);
