@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaCalendarAlt, FaClock, FaUser, FaUserMd, FaSearch, FaCheckCircle, FaTimes, FaPlus } from 'react-icons/fa';
 import adminService from '../../services/adminService';
 import { useNotifications } from '../../context/NotificationContext';
+import { formatAge } from '../../utils/dateUtils';
 
 const WALK_IN_DEFAULT = {
   name: '',
@@ -599,8 +600,15 @@ const PatientArrivals = () => {
                     value={walkInForm.dateOfBirth}
                     onChange={handleWalkInChange}
                     type="date"
+                    max={new Date().toISOString().split('T')[0]}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
+                  {walkInForm.dateOfBirth && (
+                    <p className="mt-1 text-xs text-gray-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                      <FaCalendarAlt className="inline mr-1 text-blue-500" />
+                      Age: <span className="font-semibold text-blue-700">{formatAge(walkInForm.dateOfBirth)}</span>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

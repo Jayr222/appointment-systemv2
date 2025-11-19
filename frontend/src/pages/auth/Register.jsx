@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaEye, FaEyeSlash, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaCheckCircle, FaTimesCircle, FaCalendarAlt } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
+import { formatAge } from '../../utils/dateUtils';
 
 const Register = () => {
   // Load form data from sessionStorage on mount
@@ -396,8 +397,15 @@ const Register = () => {
                 name="dateOfBirth"
                 value={formData.dateOfBirth}
                 onChange={handleChange}
+                max={new Date().toISOString().split('T')[0]}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
               />
+              {formData.dateOfBirth && (
+                <p className="mt-2 text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                  <FaCalendarAlt className="inline mr-2 text-blue-500" />
+                  Age: <span className="font-semibold text-blue-700">{formatAge(formData.dateOfBirth)}</span>
+                </p>
+              )}
             </div>
 
             <div className="mb-4">

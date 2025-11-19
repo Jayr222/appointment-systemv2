@@ -18,7 +18,7 @@ const patientDocumentSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  cloudinaryPublicId: {
+  blobUrl: {
     type: String,
     default: null
   },

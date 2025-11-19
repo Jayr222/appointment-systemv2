@@ -1,7 +1,7 @@
 import PatientDocument from '../models/PatientDocument.js';
 import User from '../models/User.js';
 import Appointment from '../models/Appointment.js';
-import { upload, useCloudinary } from '../services/documentService.js';
+import { upload, useVercelBlob, uploadToVercelBlob } from '../services/documentService.js';
 import { deleteFile } from '../services/documentService.js';
 import { logActivity } from '../services/loggingService.js';
 import path from 'path';
@@ -156,25 +156,31 @@ export const uploadPatientDocument = async (req, res) => {
       parsedDiagnosisDate = parsed;
     }
 
-    // Handle both local and Cloudinary file storage
-    const fileName = useCloudinary 
-      ? req.file.filename || req.file.public_id || `cloudinary-${Date.now()}`
-      : req.file.filename;
+    // Handle Vercel Blob or local file storage
+    let fileName, filePath, blobUrl;
     
-    const filePath = useCloudinary 
-      ? req.file.path // Cloudinary URL
-      : req.file.path; // Local path
-    
-    const cloudinaryPublicId = useCloudinary && req.file.public_id 
-      ? req.file.public_id 
-      : undefined;
+    if (useVercelBlob) {
+      // Upload to Vercel Blob
+      const uploadResult = await uploadToVercelBlob(
+        req.file,
+        `healthcare-documents/${Date.now()}-${req.file.originalname}`
+      );
+      fileName = req.file.originalname;
+      filePath = uploadResult.url;
+      blobUrl = uploadResult.url;
+    } else {
+      // Local storage
+      fileName = req.file.filename;
+      filePath = req.file.path;
+      blobUrl = undefined;
+    }
 
     const document = new PatientDocument({
       patient: patientId,
       fileName: fileName,
       originalFileName: req.file.originalname,
       filePath: filePath,
-      cloudinaryPublicId: cloudinaryPublicId,
+      blobUrl: blobUrl,
       documentType,
       uploadedBy: req.user.id,
       fileSize: req.file.size,
@@ -314,10 +320,10 @@ export const deletePatientDocument = async (req, res) => {
       return res.status(403).json({ message: 'You are not authorized to delete this document' });
     }
 
-    // Delete file from storage (local or Cloudinary)
-    if (useCloudinary && document.cloudinaryPublicId) {
-      // Delete from Cloudinary
-      await deleteFile(document.filePath, document.cloudinaryPublicId);
+    // Delete file from storage (Vercel Blob or local)
+    if (useVercelBlob && document.blobUrl) {
+      // Delete from Vercel Blob
+      await deleteFile(document.filePath, document.blobUrl);
     } else {
       // Delete from local filesystem
       let fullPath;
