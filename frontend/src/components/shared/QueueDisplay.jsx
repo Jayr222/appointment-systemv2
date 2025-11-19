@@ -455,36 +455,36 @@ const QueueDisplay = ({ doctorId = null, showControls = false }) => {
                       <span>•</span>
                       <span>{appointment.appointmentTime}</span>
                     </div>
-                    {/* Vital Signs Display */}
-                    {hasVitalSigns && (
-                      <div className="mt-2">
-                        <button
-                          onClick={() => {
-                            const newExpanded = new Set(expandedVitals);
-                            if (isVitalsExpanded) {
-                              newExpanded.delete(appointment._id);
-                            } else {
-                              newExpanded.add(appointment._id);
-                            }
-                            setExpandedVitals(newExpanded);
-                          }}
-                          className="flex items-center gap-2 text-xs text-[#31694E] hover:text-[#27543e] font-semibold"
-                        >
-                          <FaHeartbeat className="text-[#31694E]" />
-                          {isVitalsExpanded ? (
-                            <>
-                              <span>Hide Vital Signs</span>
-                              <FaChevronUp className="text-xs" />
-                            </>
-                          ) : (
-                            <>
-                              <span>View Vital Signs</span>
-                              <FaChevronDown className="text-xs" />
-                            </>
-                          )}
-                        </button>
-                        {isVitalsExpanded && (
-                          <div className="mt-2 p-3 bg-white rounded-lg border border-[#31694E] shadow-sm">
+                          {/* Vital Signs Display - Only visible to doctors */}
+                          {hasVitalSigns && user?.role === 'doctor' && (
+                            <div className="mt-2">
+                              <button
+                                onClick={() => {
+                                  const newExpanded = new Set(expandedVitals);
+                                  if (isVitalsExpanded) {
+                                    newExpanded.delete(appointment._id);
+                                  } else {
+                                    newExpanded.add(appointment._id);
+                                  }
+                                  setExpandedVitals(newExpanded);
+                                }}
+                                className="flex items-center gap-2 text-xs text-[#31694E] hover:text-[#27543e] font-semibold"
+                              >
+                                <FaHeartbeat className="text-[#31694E]" />
+                                {isVitalsExpanded ? (
+                                  <>
+                                    <span>Hide Vital Signs</span>
+                                    <FaChevronUp className="text-xs" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>View Vital Signs</span>
+                                    <FaChevronDown className="text-xs" />
+                                  </>
+                                )}
+                              </button>
+                              {isVitalsExpanded && (
+                                <div className="mt-2 p-3 bg-white rounded-lg border border-[#31694E] shadow-sm">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                               {appointment.latestVitalSigns.bloodPressure?.systolic && (
                                 <div>

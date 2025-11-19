@@ -1253,20 +1253,78 @@ export const createWalkInAppointment = async (req, res) => {
       }
     }
 
+    // Import checkAvailability for walk-in validation
+    const { checkAvailability } = await import('../services/appointmentService.js');
+    
     const now = new Date();
     let appointment = null;
     let attempt = 0;
-
-    while (!appointment && attempt < 5) {
-      const timeCandidate = new Date(now.getTime() + attempt * 1000);
+    let warnings = []; // Track warnings (break times, etc.)
+    
+    // Format date for availability check (YYYY-MM-DD format)
+    const appointmentDateStr = now.toISOString().split('T')[0];
+    
+    // Try to find an available time slot, starting from current time
+    while (!appointment && attempt < 20) { // Increased attempts to find available slot
+      const timeCandidate = new Date(now.getTime() + attempt * 60000); // Add minutes instead of seconds
       const timeString = timeCandidate.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
         hour12: false
       });
+      
+      // Format time for availability check (12-hour format like "8:00 AM")
+      const hour = timeCandidate.getHours();
+      const minute = timeCandidate.getMinutes();
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      const displayTime = `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
+      
+      // Check availability (includes break times, unavailability, and existing appointments)
+      const availability = await checkAvailability(doctorId, appointmentDateStr, displayTime);
+      
+      // For walk-ins, we allow booking even during break times/unavailability for emergencies
+      // but we track warnings to inform the admin
+      if (!availability.available) {
+        if (availability.reason?.includes('break') || availability.reason?.includes('unavailable')) {
+          // For break times/unavailability, allow but warn
+          warnings.push({
+            time: displayTime,
+            reason: availability.reason,
+            type: 'warning'
+          });
+          // Continue to try booking (allow override for emergencies)
+        } else if (availability.reason?.includes('taken') || availability.reason?.includes('reserved')) {
+          // For existing appointments, try next slot
+          attempt += 1;
+          continue;
+        } else if (availability.reason?.includes('Hospital is closed')) {
+          // Hospital closed - cannot create walk-in
+          return res.status(400).json({ 
+            message: 'Cannot create walk-in appointment outside hospital operating hours (8:00 AM - 5:00 PM)' 
+          });
+        }
+      }
 
       try {
+        // Check for existing appointment at this exact time (double-check)
+        const existingAppointment = await Appointment.findOne({
+          doctor: doctorId,
+          appointmentDate: {
+            $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0),
+            $lte: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+          },
+          appointmentTime: timeString,
+          status: { $in: ['confirmed', 'pending', 'in-progress'] }
+        });
+        
+        if (existingAppointment && attempt < 15) {
+          // Skip this time slot, try next one
+          attempt += 1;
+          continue;
+        }
+        
         appointment = await Appointment.create({
           patient: patient._id,
           doctor: doctor._id,
@@ -1283,9 +1341,13 @@ export const createWalkInAppointment = async (req, res) => {
         });
       } catch (error) {
         if (error?.code === 11000) {
+          // Duplicate key error - try next slot
           attempt += 1;
-          if (attempt >= 5) {
-            throw new Error('Unable to schedule walk-in appointment due to conflicting time slots. Please try again.');
+          if (attempt >= 20) {
+            return res.status(400).json({ 
+              message: 'Unable to create walk-in appointment. Doctor appears to be fully booked. Please try a different doctor or time.',
+              attempt
+            });
           }
         } else {
           throw error;
@@ -1294,18 +1356,30 @@ export const createWalkInAppointment = async (req, res) => {
     }
 
     if (!appointment) {
-      return res.status(500).json({ message: 'Failed to create walk-in appointment' });
+      return res.status(500).json({ 
+        message: 'Failed to create walk-in appointment. Please try a different doctor or time.',
+        warnings: warnings.length > 0 ? warnings : undefined
+      });
+    }
+    
+    // Add warnings to response if any
+    if (warnings.length > 0) {
+      console.warn('Walk-in appointment created with warnings:', warnings);
     }
 
     let queuedAppointment = await assignQueueNumber(appointment._id);
     await queuedAppointment.populate('patient', 'name email phone temporaryPasswordExpiresAt mustChangePassword');
     await queuedAppointment.populate('doctor', 'name specialization');
 
+    const warningMessages = warnings.length > 0 
+      ? warnings.map(w => `${w.time}: ${w.reason}`).join('; ')
+      : null;
+
     await logActivity(
       req.user.id,
       'create_walk_in',
       'appointment',
-      `Created walk-in appointment for patient ${queuedAppointment.patient?.name || queuedAppointment.patient}`
+      `Created walk-in appointment for patient ${queuedAppointment.patient?.name || queuedAppointment.patient}${warningMessages ? ` (Warning: ${warningMessages})` : ''}`
     );
 
     try {
@@ -1380,7 +1454,8 @@ export const createWalkInAppointment = async (req, res) => {
       temporaryPassword,
       isExistingPatient: !temporaryPassword,
       emailSent,
-      temporaryPasswordExpiresAt: patient.temporaryPasswordExpiresAt
+      temporaryPasswordExpiresAt: patient.temporaryPasswordExpiresAt,
+      warnings: warnings.length > 0 ? warnings : undefined
     });
   } catch (error) {
     console.error('Create walk-in appointment error:', error);
