@@ -450,20 +450,39 @@ export const forgotPassword = async (req, res) => {
     user.resetPasswordExpire = resetPasswordExpire;
     const savedUser = await user.save({ validateBeforeSave: false });
     
-    // Verify token was saved
+    // Verify token was saved by re-fetching from database
+    const verifiedUser = await User.findById(savedUser._id).select('resetPasswordToken resetPasswordExpire');
     console.log('💾 Token saved to database:', {
       userId: savedUser._id,
-      hasToken: !!savedUser.resetPasswordToken,
-      tokenHashMatch: savedUser.resetPasswordToken === resetPasswordToken,
-      expireTime: savedUser.resetPasswordExpire
+      hasToken: !!verifiedUser?.resetPasswordToken,
+      tokenHashMatch: verifiedUser?.resetPasswordToken === resetPasswordToken,
+      expireTime: verifiedUser?.resetPasswordExpire,
+      tokenHashPreview: verifiedUser?.resetPasswordToken?.substring(0, 20) + '...'
     });
+
+    if (!verifiedUser?.resetPasswordToken || verifiedUser.resetPasswordToken !== resetPasswordToken) {
+      console.error('❌ CRITICAL: Token was not saved correctly to database!');
+      return res.status(500).json({ 
+        message: 'Failed to generate reset token. Please try again.' 
+      });
+    }
 
     // Send email
     try {
       const emailSent = await sendPasswordResetEmail(user.email, resetToken);
       
       if (emailSent) {
+        // Double-check token is still there after email send
+        const userAfterEmail = await User.findById(savedUser._id).select('resetPasswordToken');
+        if (!userAfterEmail?.resetPasswordToken) {
+          console.error('❌ CRITICAL: Token was cleared after email send!');
+          return res.status(500).json({ 
+            message: 'Token was lost after sending email. Please request a new reset link.' 
+          });
+        }
+        
         console.log(`✅ Password reset email sent to: ${user.email}`);
+        console.log(`   Token still in database: ${!!userAfterEmail.resetPasswordToken}`);
         res.status(200).json({ 
           message: 'If an account with that email exists, a password reset link has been sent.' 
         });
@@ -601,6 +620,20 @@ export const resetPassword = async (req, res) => {
         console.log('   2. User requested a new reset link (old token was overwritten)');
         console.log('   3. Token expired and was cleared');
         console.log('   4. Database sync issue');
+        
+        // Try to find user by checking all users with reset tokens to see if email matches
+        // This helps identify if user requested a new reset link
+        const allUsersWithTokens = await User.find({
+          resetPasswordToken: { $exists: true, $ne: null },
+          isDeleted: { $ne: true }
+        }).select('email resetPasswordExpire resetPasswordToken').limit(10);
+        
+        if (allUsersWithTokens.length > 0) {
+          console.log('📋 Current active reset tokens in database:');
+          allUsersWithTokens.forEach(u => {
+            console.log(`   - ${u.email}: expires ${new Date(u.resetPasswordExpire).toISOString()}, hash: ${u.resetPasswordToken?.substring(0, 20)}...`);
+          });
+        }
       }
       
       return res.status(400).json({ message: 'Invalid or expired reset token' });
