@@ -59,6 +59,7 @@ const PatientArrivals = () => {
   }, [selectedDate, includeFuture]);
 
   const fetchPendingArrivals = async () => {
+    setLoading(true);
     try {
       const options = {};
       if (selectedDate) {
@@ -66,16 +67,38 @@ const PatientArrivals = () => {
       } else {
         options.includeFuture = includeFuture;
       }
+      
+      // Only log in development
+      if (import.meta.env.DEV) {
+        console.log('Fetching pending arrivals with options:', options);
+      }
+      
       const response = await adminService.getPendingArrivals(options);
+      
+      // Only log in development
+      if (import.meta.env.DEV) {
+        console.log('Pending arrivals response:', response);
+      }
+      
       setAppointments(response.appointments || []);
       setDoctors(response.doctors || []);
     } catch (error) {
+      // Always log errors for debugging
       console.error('Error fetching pending arrivals:', error);
+      if (import.meta.env.DEV) {
+        console.error('Error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        });
+      }
       addNotification({
         type: 'error',
         title: 'Error',
-        message: 'Failed to load pending arrivals'
+        message: error.response?.data?.message || 'Failed to load pending arrivals'
       });
+      setAppointments([]);
+      setDoctors([]);
     } finally {
       setLoading(false);
     }
