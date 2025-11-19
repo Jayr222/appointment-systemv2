@@ -9,7 +9,7 @@ import { generateToken } from '../utils/generateToken.js';
 import { logActivity, logError } from '../services/loggingService.js';
 import { noteFailedLogin, resetLoginAttempts } from '../middleware/rateLimiter.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
-import { AVATARS_DIR, ensureAvatarUploadDirExists } from '../services/avatarService.js';
+import { AVATARS_DIR, ensureAvatarUploadDirExists, uploadAvatarToVercelBlob, deleteAvatar, useVercelBlob } from '../services/avatarService.js';
 import { uploadToStorage, deleteFromStorage, getStorageTypeFromUrl } from '../services/storageService.js';
 import connectDB from '../config/db.js';
 
@@ -293,102 +293,36 @@ export const uploadAvatar = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Get file buffer (from memory storage on serverless or disk storage locally)
-    let fileBuffer;
-    if (req.file.buffer) {
-      fileBuffer = req.file.buffer;
-    } else if (req.file.path) {
-      // Local filesystem - read the file
-      fileBuffer = await fs.readFile(req.file.path);
-    } else {
-      console.error('Upload avatar: No file buffer or path available');
-      return res.status(500).json({ message: 'File processing error. Please try again.' });
+    // Delete old avatar if it exists (skip Google avatars and data URLs)
+    if (user.avatar && !user.avatar.startsWith('http') && !user.avatar.startsWith('data:')) {
+      await deleteAvatar(user.avatar, user.avatarBlobUrl);
     }
 
-    // Delete old avatar from storage if it exists
-    if (user.avatar) {
-      const storageType = getStorageTypeFromUrl(user.avatar);
-      // Only delete from cloud storage, not local files or data URLs (handled separately)
-      if (storageType && storageType !== 'local' && storageType !== 'database') {
-        await deleteFromStorage(user.avatar, storageType);
-      } else if (!user.avatar.startsWith('http') && !user.avatar.startsWith('data:')) {
-        // Delete local file
-        ensureAvatarUploadDirExists();
-        const oldAvatarPath = path.join(AVATARS_DIR, user.avatar);
-        try {
-          await fs.rm(oldAvatarPath, { force: true });
-        } catch (error) {
-          console.error('Error deleting old avatar:', error);
-        }
-      }
-    }
+    // Handle Vercel Blob or local file storage
+    let avatarValue, avatarUrl, blobUrl;
 
-    // Ensure database is connected before uploading to GridFS
-    if (mongoose.connection.readyState !== 1) {
-      console.log('⚠️ Database not connected, attempting to connect...');
-      console.log('   Connection state:', mongoose.connection.readyState);
-      await connectDB();
-      console.log('✅ Database connection ensured, state:', mongoose.connection.readyState);
+    if (useVercelBlob) {
+      // Upload to Vercel Blob
+      const uploadResult = await uploadAvatarToVercelBlob(
+        req.file,
+        `avatars/${Date.now()}-${req.file.originalname}`
+      );
+      avatarValue = uploadResult.url;
+      avatarUrl = uploadResult.url;
+      blobUrl = uploadResult.url;
+      console.log('✅ Avatar uploaded to Vercel Blob:', avatarUrl);
     } else {
-      console.log('✅ Database already connected, state:', mongoose.connection.readyState);
-    }
-    
-    // Upload to cloud storage (or use local/filesystem)
-    const mimeType = req.file.mimetype || 'image/jpeg';
-    const filename = req.file.originalname || `avatar-${Date.now()}.jpg`;
-    console.log('📤 Starting avatar upload to storage...');
-    console.log('   File size:', fileBuffer.length);
-    console.log('   MIME type:', mimeType);
-    console.log('   Filename:', filename);
-    console.log('   Serverless environment:', !!process.env.VERCEL);
-    
-    let uploadResult;
-    let avatarValue;
-    let avatarUrl;
-
-    // In serverless environments, GridFS streaming can be unreliable
-    // For avatars, prefer base64 storage directly in database if GridFS fails
-    if (process.env.VERCEL) {
-      console.log('⚠️ Serverless environment detected - using base64 storage for avatars');
-      // For serverless, store avatars as base64 data URLs directly in database
-      // This is more reliable than GridFS streaming in serverless functions
-      const base64 = fileBuffer.toString('base64');
-      avatarValue = `data:${mimeType};base64,${base64}`;
-      avatarUrl = avatarValue;
-      console.log(`✅ Avatar stored as base64 data URL (length: ${avatarValue.length})`);
-    } else {
-      // Non-serverless: Try GridFS first, fall back to base64 if it fails
-      try {
-        uploadResult = await uploadToStorage(fileBuffer, filename, mimeType, 'avatars');
-        console.log('📥 Upload result received:', uploadResult ? 'Success' : 'Null (using local)');
-        
-        if (uploadResult) {
-          // Cloud storage was used
-          avatarValue = uploadResult.url;
-          avatarUrl = uploadResult.url;
-          console.log(`✅ Avatar uploaded to ${uploadResult.storageType || 'cloud storage'}: ${avatarUrl}`);
-          console.log('   File ID:', uploadResult.fileId);
-        } else {
-          // Local filesystem storage
-          const fileExt = req.file.originalname ? path.extname(req.file.originalname) : '.jpg';
-          avatarValue = req.file.filename || `avatar-${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExt}`;
-          avatarUrl = `/uploads/avatars/${avatarValue}`;
-          console.log(`✅ Avatar saved to local filesystem: ${avatarUrl}`);
-        }
-      } catch (storageError) {
-        console.error('⚠️ Storage upload failed, falling back to base64:', storageError.message);
-        // Fallback to base64 storage in database
-        const base64 = fileBuffer.toString('base64');
-        avatarValue = `data:${mimeType};base64,${base64}`;
-        avatarUrl = avatarValue;
-        console.log(`✅ Avatar stored as base64 data URL (fallback, length: ${avatarValue.length})`);
-      }
+      // Local storage
+      avatarValue = req.file.filename;
+      avatarUrl = `/uploads/avatars/${avatarValue}`;
+      blobUrl = undefined;
+      console.log('✅ Avatar saved to local filesystem:', avatarUrl);
     }
 
     // Update user with new avatar
     console.log('💾 Saving avatar to user record...');
-    console.log('   Avatar value:', avatarValue);
     user.avatar = avatarValue;
+    user.avatarBlobUrl = blobUrl;
     await user.save();
     console.log('✅ User record updated with new avatar');
 

@@ -2,11 +2,21 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { put, del } from '@vercel/blob';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const avatarsDir = path.join(__dirname, '../../uploads/avatars/');
+
+// Check if we should use Vercel Blob (for production)
+const useVercelBlob = process.env.BLOB_READ_WRITE_TOKEN && process.env.BLOB_READ_WRITE_TOKEN.length > 0;
+
+if (useVercelBlob) {
+  console.log('📸 Using Vercel Blob for avatar storage');
+} else {
+  console.log('📸 Using local filesystem for avatar storage');
+}
 
 const ensureAvatarsDir = () => {
   if (!fs.existsSync(avatarsDir)) {
@@ -15,27 +25,23 @@ const ensureAvatarsDir = () => {
   return avatarsDir;
 };
 
-// On Vercel/serverless, use memory storage (files don't persist to filesystem)
-// In local dev, use disk storage
-const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
-
-const diskStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    try {
-      cb(null, ensureAvatarsDir());
-    } catch (error) {
-      cb(error);
-    }
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.round(Math.random() * 1E9));
-    cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const memoryStorage = multer.memoryStorage();
-
-const storage = isServerless ? memoryStorage : diskStorage;
+// Configure storage - Always use multer memory storage for Vercel Blob
+// Local files still use disk storage
+const storage = useVercelBlob
+  ? multer.memoryStorage() // Store in memory for Vercel Blob upload
+  : multer.diskStorage({
+      destination: function (req, file, cb) {
+        try {
+          cb(null, ensureAvatarsDir());
+        } catch (error) {
+          cb(error);
+        }
+      },
+      filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+      }
+    });
 
 // File filter for images only
 const fileFilter = (req, file, cb) => {
@@ -58,14 +64,59 @@ export const uploadAvatar = multer({
   fileFilter: fileFilter
 });
 
+// Upload avatar to Vercel Blob
+export const uploadAvatarToVercelBlob = async (file, filename) => {
+  if (!useVercelBlob) {
+    throw new Error('Vercel Blob is not configured');
+  }
+
+  const blob = await put(filename, file.buffer, {
+    access: 'public',
+    addRandomSuffix: true,
+  });
+
+  return {
+    url: blob.url,
+    pathname: blob.pathname,
+    downloadUrl: blob.downloadUrl
+  };
+};
+
+// Delete avatar from Vercel Blob or local filesystem
+export const deleteAvatar = async (filePath, blobUrl = null) => {
+  try {
+    if (useVercelBlob && blobUrl) {
+      // Delete from Vercel Blob
+      await del(blobUrl);
+      return true;
+    } else {
+      // Delete from local filesystem
+      const fullPath = path.join(avatarsDir, path.basename(filePath));
+      if (fs.existsSync(fullPath)) {
+        await fs.promises.unlink(fullPath);
+      }
+      return true;
+    }
+  } catch (error) {
+    console.error('Avatar deletion error:', error);
+    return false;
+  }
+};
+
 export const AVATARS_DIR = avatarsDir;
 export const ensureAvatarUploadDirExists = ensureAvatarsDir;
+export { useVercelBlob };
 
 // Get avatar URL
-export const getAvatarUrl = (avatar) => {
+export const getAvatarUrl = (avatar, blobUrl = null) => {
   if (!avatar) return null;
   
-  // If it's already a URL (from Google OAuth), return as is
+  // If blobUrl is provided (Vercel Blob), use it
+  if (blobUrl) {
+    return blobUrl;
+  }
+  
+  // If it's already a URL (from Google OAuth or Vercel Blob), return as is
   if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
     return avatar;
   }

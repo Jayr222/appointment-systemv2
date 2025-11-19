@@ -159,6 +159,10 @@ const userSchema = new mongoose.Schema({
   avatar: {
     type: String
   },
+  avatarBlobUrl: {
+    type: String,
+    default: null
+  },
   isDeleted: {
     type: Boolean,
     default: false
