@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
 import doctorService from '../../services/doctorService';
-import { FaCamera, FaUser, FaPhone, FaEnvelope, FaMapMarkerAlt, FaIdCard, FaGraduationCap, FaBriefcase, FaCheckCircle, FaClock, FaCalendarAlt, FaClipboardList, FaUserMd, FaLock, FaKey, FaMobile, FaShieldAlt } from 'react-icons/fa';
+import { FaCamera, FaUser, FaPhone, FaEnvelope, FaMapMarkerAlt, FaIdCard, FaGraduationCap, FaBriefcase, FaCheckCircle, FaClock, FaCalendarAlt, FaClipboardList, FaUserMd, FaLock, FaMobile, FaShieldAlt } from 'react-icons/fa';
 import Avatar from '../../components/shared/Avatar';
 import { Link } from 'react-router-dom';
 import GoogleAccountConnect from '../../components/shared/GoogleAccountConnect';
@@ -47,16 +47,6 @@ const Profile = () => {
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [emailMessage, setEmailMessage] = useState('');
   const [phoneMessage, setPhoneMessage] = useState('');
-  const [twoFactorData, setTwoFactorData] = useState({
-    qrCode: null,
-    secret: null,
-    verificationCode: '',
-    backupCodes: [],
-    showBackupCodes: false
-  });
-  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
-  const [twoFactorMessage, setTwoFactorMessage] = useState('');
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(user?.twoFactorEnabled || false);
   const [passwordCooldown, setPasswordCooldown] = useState(null);
   const [emailCooldown, setEmailCooldown] = useState(null);
 
@@ -66,7 +56,6 @@ const Profile = () => {
         const response = await authService.getMe();
         if (response.user) {
           setUserData(response.user);
-          setTwoFactorEnabled(response.user.twoFactorEnabled || false);
           
           // Calculate password cooldown
           if (response.user.lastPasswordChange) {
@@ -282,84 +271,6 @@ const Profile = () => {
     }
   };
 
-  const handleSetup2FA = async () => {
-    setTwoFactorLoading(true);
-    setTwoFactorMessage('');
-
-    try {
-      const response = await authService.setup2FA();
-      setTwoFactorData({
-        ...twoFactorData,
-        qrCode: response.qrCode,
-        secret: response.manualEntryKey
-      });
-      setTwoFactorMessage('Scan the QR code with your authenticator app');
-    } catch (error) {
-      console.error('Error setting up 2FA:', error);
-      setTwoFactorMessage(error.response?.data?.message || 'Failed to set up 2FA');
-    } finally {
-      setTwoFactorLoading(false);
-    }
-  };
-
-  const handleVerify2FA = async (e) => {
-    e.preventDefault();
-    setTwoFactorMessage('');
-
-    if (!twoFactorData.verificationCode) {
-      setTwoFactorMessage('Please enter the verification code');
-      return;
-    }
-
-    setTwoFactorLoading(true);
-
-    try {
-      const response = await authService.verify2FA(twoFactorData.verificationCode);
-      setTwoFactorEnabled(true);
-      setTwoFactorData({
-        ...twoFactorData,
-        backupCodes: response.backupCodes || [],
-        showBackupCodes: true,
-        verificationCode: '',
-        qrCode: null,
-        secret: null
-      });
-      setTwoFactorMessage('2FA enabled successfully! Please save your backup codes.');
-    } catch (error) {
-      console.error('Error verifying 2FA:', error);
-      setTwoFactorMessage(error.response?.data?.message || 'Invalid verification code');
-    } finally {
-      setTwoFactorLoading(false);
-    }
-  };
-
-  const handleDisable2FA = async (e) => {
-    e.preventDefault();
-    setTwoFactorMessage('');
-
-    const password = prompt('Enter your password to disable 2FA:');
-    if (!password) return;
-
-    setTwoFactorLoading(true);
-
-    try {
-      await authService.disable2FA(password);
-      setTwoFactorEnabled(false);
-      setTwoFactorData({
-        qrCode: null,
-        secret: null,
-        verificationCode: '',
-        backupCodes: [],
-        showBackupCodes: false
-      });
-      setTwoFactorMessage('2FA disabled successfully');
-    } catch (error) {
-      console.error('Error disabling 2FA:', error);
-      setTwoFactorMessage(error.response?.data?.message || 'Failed to disable 2FA. Please check your password.');
-    } finally {
-      setTwoFactorLoading(false);
-    }
-  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -999,119 +910,6 @@ const Profile = () => {
             </form>
           </div>
 
-          {/* Two-Factor Authentication */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h4 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2">
-              <FaKey className="text-primary-600" />
-              Two-Factor Authentication
-            </h4>
-            <p className="text-sm text-gray-600 mb-4">
-              Add an extra layer of security to your account by enabling two-factor authentication.
-            </p>
-
-            {twoFactorMessage && (
-              <div 
-                className={`mb-4 px-4 py-3 rounded border ${
-                  twoFactorMessage.includes('success') || twoFactorMessage.includes('enabled')
-                    ? 'bg-green-100 border-green-400 text-green-700' 
-                    : 'bg-red-100 border-red-400 text-red-700'
-                }`}
-              >
-                {twoFactorMessage}
-              </div>
-            )}
-
-            {twoFactorEnabled ? (
-              <div className="space-y-4">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-green-800 font-semibold flex items-center gap-2">
-                    <FaCheckCircle className="text-green-600" />
-                    2FA is currently enabled
-                  </p>
-                </div>
-
-                <form onSubmit={handleDisable2FA}>
-                  <button
-                    type="submit"
-                    disabled={twoFactorLoading}
-                    className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {twoFactorLoading ? 'Disabling...' : 'Disable Two-Factor Authentication'}
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {!twoFactorData.qrCode ? (
-                  <button
-                    onClick={handleSetup2FA}
-                    disabled={twoFactorLoading}
-                    className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {twoFactorLoading ? 'Setting up...' : 'Set Up Two-Factor Authentication'}
-                  </button>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <p className="text-sm text-gray-700 mb-2">Scan this QR code with your authenticator app:</p>
-                      {twoFactorData.qrCode && (
-                        <div className="flex justify-center mb-4">
-                          <img src={twoFactorData.qrCode} alt="2FA QR Code" className="border-2 border-gray-300 rounded-lg" />
-                        </div>
-                      )}
-                      {twoFactorData.secret && (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
-                          <p className="text-xs text-gray-600 mb-1">Or enter this code manually:</p>
-                          <p className="text-sm font-mono font-bold text-gray-800">{twoFactorData.secret}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <form onSubmit={handleVerify2FA}>
-                      <div>
-                        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="verificationCode">
-                          Enter Verification Code
-                        </label>
-                        <input
-                          type="text"
-                          id="verificationCode"
-                          name="verificationCode"
-                          value={twoFactorData.verificationCode}
-                          onChange={(e) => setTwoFactorData({ ...twoFactorData, verificationCode: e.target.value })}
-                          required
-                          maxLength={6}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500 text-center text-lg font-mono"
-                          placeholder="000000"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={twoFactorLoading}
-                        className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed mt-4"
-                      >
-                        {twoFactorLoading ? 'Verifying...' : 'Verify and Enable 2FA'}
-                      </button>
-                    </form>
-                  </div>
-                )}
-
-                {twoFactorData.showBackupCodes && twoFactorData.backupCodes.length > 0 && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-                    <p className="text-yellow-800 font-semibold mb-2">⚠️ Save these backup codes!</p>
-                    <p className="text-xs text-yellow-700 mb-3">These codes can be used to access your account if you lose your device. Store them in a safe place.</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {twoFactorData.backupCodes.map((code, index) => (
-                        <div key={index} className="bg-white border border-yellow-300 rounded px-3 py-2 text-sm font-mono text-center">
-                          {code}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       )}
     </div>

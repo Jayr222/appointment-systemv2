@@ -261,7 +261,13 @@ export const downloadDocument = async (req, res) => {
       return res.status(403).json({ message: 'You are not authorized to access this document' });
     }
 
-    // Determine the correct file path
+    // Check if file is stored in Vercel Blob
+    if (useVercelBlob && document.blobUrl) {
+      // Redirect to Vercel Blob URL (publicly accessible)
+      return res.redirect(document.blobUrl);
+    }
+
+    // Determine the correct file path for local storage
     let fullPath;
     if (document.filePath) {
       // If filePath is absolute, use it directly

@@ -143,21 +143,6 @@ export const authService = {
     return response.data;
   },
 
-  setup2FA: async () => {
-    const response = await api.post('/auth/2fa/setup');
-    return response.data;
-  },
-
-  verify2FA: async (token) => {
-    const response = await api.post('/auth/2fa/verify', { token });
-    return response.data;
-  },
-
-  disable2FA: async (password) => {
-    const response = await api.post('/auth/2fa/disable', { password });
-    return response.data;
-  },
-
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');

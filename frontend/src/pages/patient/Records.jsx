@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   FaHeartbeat, FaHospital, FaStethoscope, FaNotesMedical, 
-  FaSearch, FaPills, FaFlask, FaCalendarAlt, FaDownload, FaPrint, FaCalendarPlus 
+  FaSearch, FaPills, FaFlask, FaCalendarAlt, FaDownload, FaPrint, FaCalendarPlus,
+  FaList, FaCalendar, FaChevronLeft, FaChevronRight
 } from 'react-icons/fa';
 import patientService from '../../services/patientService';
 
@@ -12,6 +13,9 @@ const Records = () => {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
 
   useEffect(() => {
     const fetchRecords = async () => {
@@ -59,6 +63,57 @@ const Records = () => {
     } finally {
       setDownloading(false);
     }
+  };
+
+  // Calendar helper functions
+  const getRecordsForDate = (date) => {
+    return records.filter(record => {
+      const recordDate = new Date(record.createdAt);
+      return recordDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    const days = [];
+    // Add empty cells for days before month starts
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    // Add days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day));
+    }
+    return days;
+  };
+
+  const previousMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+  };
+
+  const handleDateClick = (date) => {
+    setSelectedDate(date);
+    const recordsForDate = getRecordsForDate(date);
+    if (recordsForDate.length > 0) {
+      setSelectedRecord(recordsForDate[0]);
+    }
+  };
+
+  const getFilteredRecords = () => {
+    if (selectedDate) {
+      return getRecordsForDate(selectedDate);
+    }
+    return records;
   };
 
   const handlePrintPrescription = (record) => {
@@ -252,20 +307,55 @@ const Records = () => {
     return <div className="text-center py-8">Loading...</div>;
   }
 
+  const filteredRecords = getFilteredRecords();
+  const days = getDaysInMonth(currentMonth);
+  const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">My Medical History</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">My Medical History</h1>
+        
+        {/* View Toggle */}
+        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => {
+              setViewMode('list');
+              setSelectedDate(null);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+              viewMode === 'list'
+                ? 'bg-white text-primary-600 shadow'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <FaList /> List View
+          </button>
+          <button
+            onClick={() => setViewMode('calendar')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+              viewMode === 'calendar'
+                ? 'bg-white text-primary-600 shadow'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <FaCalendar /> Calendar View
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Panel - Records List */}
+        {/* Left Panel - Records List or Calendar */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow-md p-6 border sticky top-20">
-            <h2 className="text-xl font-bold mb-4 text-gray-800">Past Visits</h2>
-            {records.length === 0 ? (
-              <p className="text-gray-600">No medical records found</p>
-            ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {records.map((record) => (
+            {viewMode === 'list' ? (
+              <>
+                <h2 className="text-xl font-bold mb-4 text-gray-800">Past Visits</h2>
+                {records.length === 0 ? (
+                  <p className="text-gray-600">No medical records found</p>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {records.map((record) => (
                   <div
                     key={record._id}
                     onClick={() => setSelectedRecord(record)}
@@ -287,8 +377,109 @@ const Records = () => {
                       {record.diagnosis}
                     </p>
                   </div>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Calendar View */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <button
+                      onClick={previousMonth}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition"
+                    >
+                      <FaChevronLeft />
+                    </button>
+                    <h2 className="text-lg font-bold text-gray-800">{monthName}</h2>
+                    <button
+                      onClick={nextMonth}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition"
+                    >
+                      <FaChevronRight />
+                    </button>
+                  </div>
+
+                  {/* Day Headers */}
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="text-center text-xs font-semibold text-gray-600 py-1">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Calendar Days */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {days.map((day, index) => {
+                      if (!day) {
+                        return <div key={`empty-${index}`} className="aspect-square" />;
+                      }
+
+                      const dayRecords = getRecordsForDate(day);
+                      const hasRecords = dayRecords.length > 0;
+                      const isSelected = selectedDate?.toDateString() === day.toDateString();
+                      const isToday = day.toDateString() === new Date().toDateString();
+
+                      return (
+                        <button
+                          key={day.toISOString()}
+                          onClick={() => handleDateClick(day)}
+                          className={`aspect-square p-1 rounded-lg text-sm transition relative ${
+                            isSelected
+                              ? 'bg-primary-600 text-white font-bold'
+                              : hasRecords
+                              ? 'bg-blue-100 text-blue-900 font-semibold hover:bg-blue-200'
+                              : isToday
+                              ? 'bg-gray-200 text-gray-900 font-semibold'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {day.getDate()}
+                          {hasRecords && !isSelected && (
+                            <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
+                              <div className="w-1 h-1 bg-blue-600 rounded-full"></div>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Selected Date Records */}
+                {selectedDate && (
+                  <div className="mt-4 border-t pt-4">
+                    <h3 className="text-sm font-bold text-gray-700 mb-2">
+                      {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </h3>
+                    {filteredRecords.length === 0 ? (
+                      <p className="text-sm text-gray-500">No visits on this date</p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {filteredRecords.map((record) => (
+                          <div
+                            key={record._id}
+                            onClick={() => setSelectedRecord(record)}
+                            className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                              selectedRecord?._id === record._id
+                                ? 'border-primary-500 bg-primary-50'
+                                : 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            <p className="text-xs text-gray-600">
+                              {new Date(record.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <p className="text-sm font-semibold text-gray-800">Dr. {record.doctor?.name}</p>
+                            <p className="text-xs text-primary-600 truncate">{record.diagnosis}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
