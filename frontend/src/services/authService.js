@@ -119,7 +119,9 @@ export const authService = {
   },
 
   resetPassword: async (token, password) => {
-    const response = await api.put(`/auth/reset-password/${token}`, { password });
+    // URL encode the token to handle any special characters properly
+    const encodedToken = encodeURIComponent(token);
+    const response = await api.put(`/auth/reset-password/${encodedToken}`, { password });
     return response.data;
   },
 

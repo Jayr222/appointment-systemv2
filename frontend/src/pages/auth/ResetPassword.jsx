@@ -16,6 +16,13 @@ const ResetPassword = () => {
   useEffect(() => {
     if (!token) {
       setError('Invalid reset link. Please request a new password reset.');
+    } else {
+      // Debug: Log token info (remove in production if needed)
+      console.log('Reset password token received:', {
+        hasToken: !!token,
+        tokenLength: token?.length,
+        tokenPreview: token?.substring(0, 20) + '...'
+      });
     }
   }, [token]);
 
@@ -42,6 +49,7 @@ const ResetPassword = () => {
     setLoading(true);
 
     try {
+      console.log('Attempting password reset with token:', token?.substring(0, 20) + '...');
       const response = await authService.resetPassword(token, password);
       setMessage(response.message || 'Password reset successfully!');
       
@@ -50,6 +58,7 @@ const ResetPassword = () => {
         navigate('/login');
       }, 2000);
     } catch (err) {
+      console.error('Password reset error:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Failed to reset password. The link may be invalid or expired.');
     } finally {
       setLoading(false);

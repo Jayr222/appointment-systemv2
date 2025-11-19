@@ -67,7 +67,8 @@ import Contact from './pages/Contact.jsx';
 const ResetPasswordRedirect = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
-  const redirectUrl = token ? `/reset-password?token=${token}` : '/reset-password';
+  // Properly encode the token in the URL
+  const redirectUrl = token ? `/reset-password?token=${encodeURIComponent(token)}` : '/reset-password';
   return <Navigate to={redirectUrl} replace />;
 };
 

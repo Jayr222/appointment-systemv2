@@ -487,11 +487,23 @@ export const forgotPassword = async (req, res) => {
 // @access  Public
 export const resetPassword = async (req, res) => {
   try {
-    const { token } = req.params;
+    // Decode the token from URL (it may be URL-encoded)
+    let { token } = req.params;
+    try {
+      token = decodeURIComponent(token);
+    } catch (e) {
+      // If decoding fails, use token as-is
+      console.log('Token decode warning:', e.message);
+    }
+    
     const { password } = req.body;
 
     if (!password || password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    if (!token) {
+      return res.status(400).json({ message: 'Reset token is required' });
     }
 
     // Hash token to compare with stored token
@@ -508,6 +520,24 @@ export const resetPassword = async (req, res) => {
     });
 
     if (!user) {
+      // Log for debugging (don't expose to user)
+      console.log('Reset password attempt failed:', {
+        tokenLength: token?.length,
+        tokenHash: resetPasswordToken.substring(0, 10) + '...',
+        hasExpireCheck: true,
+        currentTime: Date.now()
+      });
+      
+      // Check if token exists but expired
+      const expiredUser = await User.findOne({
+        resetPasswordToken,
+        isDeleted: { $ne: true }
+      });
+      
+      if (expiredUser) {
+        return res.status(400).json({ message: 'Reset token has expired. Please request a new password reset link.' });
+      }
+      
       return res.status(400).json({ message: 'Invalid or expired reset token' });
     }
 
