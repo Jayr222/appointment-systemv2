@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FaHeartbeat, FaSave, FaHistory, FaTimes, FaSearch } from 'react-icons/fa';
-import nurseService from '../../services/nurseService';
+import adminService from '../../services/adminService';
 import { useNotifications } from '../../context/NotificationContext';
 
 const VitalSigns = () => {
@@ -29,14 +29,24 @@ const VitalSigns = () => {
   const { addNotification } = useNotifications();
 
   useEffect(() => {
+    fetchPatients();
     if (formData.patientId) {
       fetchVitalSignsHistory();
     }
   }, [formData.patientId]);
 
+  const fetchPatients = async () => {
+    try {
+      const response = await adminService.getUsers('patient', true);
+      setPatients(response.users || []);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+    }
+  };
+
   const fetchVitalSignsHistory = async () => {
     try {
-      const response = await nurseService.getPatientVitalSigns(formData.patientId);
+      const response = await adminService.getPatientVitalSigns(formData.patientId);
       setVitalSignsHistory(response.vitalSigns || []);
     } catch (error) {
       console.error('Error fetching vital signs history:', error);
@@ -93,7 +103,7 @@ const VitalSigns = () => {
 
     setSaving(true);
     try {
-      await nurseService.recordVitalSigns(formData);
+      await adminService.recordVitalSigns(formData);
       addNotification({
         type: 'success',
         title: 'Vital Signs Recorded',
@@ -129,6 +139,13 @@ const VitalSigns = () => {
     }
   };
 
+  const filteredPatients = patients.filter(patient =>
+    patient.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    patient.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    patient.phone?.includes(searchQuery) ||
+    patient._id?.includes(searchQuery)
+  );
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -153,18 +170,39 @@ const VitalSigns = () => {
                 <label className="block text-gray-700 text-sm font-bold mb-2">
                   Patient <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <div className="mb-2">
+                  <div className="relative">
+                    <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, email, phone, or ID..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <select
                   value={formData.patientId}
                   onChange={(e) => {
                     setFormData({ ...formData, patientId: e.target.value });
                     setSearchQuery('');
                   }}
-                  placeholder="Patient ID"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#31694E] focus:outline-none"
                   required
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter patient ID or select from queue</p>
+                >
+                  <option value="">Select a patient</option>
+                  {filteredPatients.map((patient) => (
+                    <option key={patient._id} value={patient._id}>
+                      {patient.name} - {patient.email} - {patient.phone}
+                    </option>
+                  ))}
+                </select>
+                {formData.patientId && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Selected: {patients.find(p => p._id === formData.patientId)?.name || formData.patientId}
+                  </p>
+                )}
               </div>
 
               {/* Blood Pressure */}
@@ -399,10 +437,20 @@ const VitalSigns = () => {
                         {record.temperature?.value && (
                           <p><strong>Temp:</strong> {record.temperature.value}°{record.temperature.unit === 'Celsius' ? 'C' : 'F'}</p>
                         )}
+                        {record.respiratoryRate && <p><strong>RR:</strong> {record.respiratoryRate} /min</p>}
                         {record.oxygenSaturation && (
                           <p><strong>SpO2:</strong> {record.oxygenSaturation}%</p>
                         )}
-                        {record.bmi && <p><strong>BMI:</strong> {record.bmi}</p>}
+                        {record.weight?.value && (
+                          <p><strong>Weight:</strong> {record.weight.value} {record.weight.unit}</p>
+                        )}
+                        {record.height?.value && (
+                          <p><strong>Height:</strong> {record.height.value} {record.height.unit}</p>
+                        )}
+                        {record.painLevel && <p><strong>Pain:</strong> {record.painLevel}/10</p>}
+                        {record.recordedBy?.name && (
+                          <p className="text-xs text-gray-500 mt-2">Recorded by: {record.recordedBy.name}</p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -417,4 +465,3 @@ const VitalSigns = () => {
 };
 
 export default VitalSigns;
-

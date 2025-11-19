@@ -13,7 +13,9 @@ import {
   getSystemLogs,
   getPendingArrivals,
   confirmPatientArrival,
-  createWalkInAppointment
+  createWalkInAppointment,
+  recordVitalSigns,
+  getPatientVitalSigns
 } from '../controllers/adminController.js';
 import {
   getPendingVerifications,
@@ -43,6 +45,10 @@ router.get('/logs', adminOnly, getSystemLogs);
 router.get('/doctor-verifications', adminOnly, getPendingVerifications);
 router.put('/doctor-verifications/:id/approve', adminOnly, approveDoctor);
 router.put('/doctor-verifications/:id/reject', adminOnly, rejectDoctor);
+
+// Vital Signs routes (Admin only can add, but doctors can view)
+router.post('/vital-signs', adminOnly, recordVitalSigns);
+router.get('/vital-signs/:patientId', adminOnly, getPatientVitalSigns);
 
 export default router;
 

@@ -121,6 +121,17 @@ export const adminService = {
   deletePatientDocument: async (documentId) => {
     const response = await api.delete(`/admin/patient-documents/${documentId}`);
     return response.data;
+  },
+
+  // Vital Signs functions (Admin only)
+  recordVitalSigns: async (vitalSignsData) => {
+    const response = await api.post('/admin/vital-signs', vitalSignsData);
+    return response.data;
+  },
+
+  getPatientVitalSigns: async (patientId) => {
+    const response = await api.get(`/admin/vital-signs/${patientId}`);
+    return response.data;
   }
 };
 

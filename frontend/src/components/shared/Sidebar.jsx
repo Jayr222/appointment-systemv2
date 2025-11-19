@@ -40,6 +40,7 @@ const Sidebar = () => {
     { path: '/admin/users', label: 'Manage Users', icon: FaUsers },
     { path: '/admin/appointments', label: 'Appointments', icon: FaCalendarAlt },
     { path: '/admin/patient-arrivals', label: 'Patient Arrivals', icon: FaClock },
+    { path: '/admin/vital-signs', label: 'Vital Signs', icon: FaHeartbeat },
     { path: '/admin/doctor-verifications', label: 'Verify Doctors', icon: FaUserMd },
     { path: '/admin/email-templates', label: 'Email Templates', icon: FaMailBulk },
     { path: '/admin/reports', label: 'Reports', icon: FaChartBar },

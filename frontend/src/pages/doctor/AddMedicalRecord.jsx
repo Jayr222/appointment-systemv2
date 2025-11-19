@@ -12,13 +12,6 @@ const AddMedicalRecord = () => {
     appointment: appointment?._id || '',
     chiefComplaint: '',
     historyOfPresentIllness: '',
-    vitalSigns: {
-      bloodPressure: '',
-      heartRate: '',
-      temperature: '',
-      weight: '',
-      height: ''
-    },
     examination: '',
     diagnosis: '',
     treatmentPlan: '',
@@ -36,14 +29,6 @@ const AddMedicalRecord = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleVitalSignChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      vitalSigns: { ...prev.vitalSigns, [name]: value }
-    }));
   };
 
   const handleMedicationChange = (index, field, value) => {
@@ -156,51 +141,11 @@ const AddMedicalRecord = () => {
           />
         </div>
 
-        {/* Vital Signs */}
-        <div className="mb-6">
-          <label className="block text-gray-700 text-sm font-bold mb-3">Vital Signs</label>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <input
-              type="text"
-              name="bloodPressure"
-              value={formData.vitalSigns.bloodPressure}
-              onChange={handleVitalSignChange}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-              placeholder="BP"
-            />
-            <input
-              type="number"
-              name="heartRate"
-              value={formData.vitalSigns.heartRate}
-              onChange={handleVitalSignChange}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-              placeholder="HR (bpm)"
-            />
-            <input
-              type="number"
-              name="temperature"
-              value={formData.vitalSigns.temperature}
-              onChange={handleVitalSignChange}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-              placeholder="Temp (°C)"
-            />
-            <input
-              type="number"
-              name="weight"
-              value={formData.vitalSigns.weight}
-              onChange={handleVitalSignChange}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-              placeholder="Weight (kg)"
-            />
-            <input
-              type="number"
-              name="height"
-              value={formData.vitalSigns.height}
-              onChange={handleVitalSignChange}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500"
-              placeholder="Height (cm)"
-            />
-          </div>
+        {/* Note: Vital signs are added by admin only */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Note:</strong> Vital signs are recorded by administrators. You can view them in the patient's record after they have been recorded.
+          </p>
         </div>
 
         {/* Physical Examination */}

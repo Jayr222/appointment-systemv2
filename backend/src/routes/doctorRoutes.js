@@ -9,6 +9,7 @@ import {
   getSchedule,
   getPatientMedicalHistory
 } from '../controllers/doctorController.js';
+import { getPatientVitalSigns } from '../controllers/adminController.js';
 import { getVerificationStatus } from '../controllers/doctorVerificationController.js';
 import { doctorOnly } from '../middleware/doctorOnly.js';
 import verifiedDoctorOnly from '../middleware/verifiedDoctorOnly.js';
@@ -23,6 +24,7 @@ router.get('/appointments', doctorOnly, getAppointments); // Allow unverified do
 router.put('/appointments/:id/status', doctorOnly, updateAppointmentStatus); // Allow unverified doctors to update appointment status
 router.get('/schedule', doctorOnly, getSchedule); // Allow unverified doctors to see their schedule
 router.get('/patients/:id/medical-history', doctorOnly, getPatientMedicalHistory); // Allow all doctors to view patient medical history
+router.get('/patients/:id/vital-signs', doctorOnly, getPatientVitalSigns); // Allow all doctors to view patient vital signs (read-only)
 
 // Patient document routes (require verified doctor access)
 router.use('/patient-documents', patientDocumentRoutes);

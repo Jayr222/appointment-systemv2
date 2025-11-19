@@ -4,6 +4,7 @@ import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import PatientDocument from '../models/PatientDocument.js';
 import ActivityLog from '../models/ActivityLog.js';
+import VitalSigns from '../models/VitalSigns.js';
 import { logActivity } from '../services/loggingService.js';
 import { assignQueueNumber, getTodayQueue } from '../services/queueService.js';
 import { emitQueueUpdate } from '../utils/socketEmitter.js';
@@ -838,6 +839,91 @@ export const getSystemLogs = async (req, res) => {
     });
   } catch (error) {
     console.error('Get system logs error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Record vital signs (Admin only)
+// @route   POST /api/admin/vital-signs
+// @access  Private (Admin)
+export const recordVitalSigns = async (req, res) => {
+  try {
+    const {
+      patientId,
+      appointmentId,
+      bloodPressure,
+      heartRate,
+      temperature,
+      respiratoryRate,
+      oxygenSaturation,
+      weight,
+      height,
+      notes,
+      symptoms,
+      painLevel
+    } = req.body;
+
+    const vitalSigns = await VitalSigns.create({
+      patient: patientId,
+      appointment: appointmentId || null,
+      recordedBy: req.user.id,
+      bloodPressure: bloodPressure ? {
+        systolic: bloodPressure.systolic,
+        diastolic: bloodPressure.diastolic
+      } : undefined,
+      heartRate,
+      temperature: temperature ? {
+        value: temperature.value,
+        unit: temperature.unit || 'Celsius'
+      } : undefined,
+      respiratoryRate,
+      oxygenSaturation,
+      weight: weight ? {
+        value: weight.value,
+        unit: weight.unit || 'kg'
+      } : undefined,
+      height: height ? {
+        value: height.value,
+        unit: height.unit || 'cm'
+      } : undefined,
+      notes,
+      symptoms: symptoms || [],
+      painLevel
+    });
+
+    await vitalSigns.populate('patient', 'name email');
+    await vitalSigns.populate('recordedBy', 'name');
+
+    // Log activity
+    await logActivity(req.user.id, 'record_vital_signs', 'vital_signs', 
+      `Recorded vital signs for ${vitalSigns.patient.name}`);
+
+    res.status(201).json({
+      success: true,
+      vitalSigns
+    });
+  } catch (error) {
+    console.error('Record vital signs error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get patient vital signs history (Admin or Doctor can view)
+// @route   GET /api/admin/vital-signs/:patientId
+// @access  Private (Admin or Doctor)
+export const getPatientVitalSigns = async (req, res) => {
+  try {
+    const vitalSigns = await VitalSigns.find({ patient: req.params.patientId })
+      .populate('recordedBy', 'name')
+      .populate('appointment', 'appointmentDate appointmentTime')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      vitalSigns
+    });
+  } catch (error) {
+    console.error('Get patient vital signs error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

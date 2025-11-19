@@ -47,6 +47,7 @@ import SystemLogs from './pages/admin/SystemLogs';
 import DoctorVerifications from './pages/admin/DoctorVerifications';
 import Reports from './pages/admin/Reports';
 import EmailTemplates from './pages/admin/EmailTemplates';
+import AdminVitalSigns from './pages/admin/VitalSigns';
 
 // Nurse Pages
 import NurseDashboard from './pages/nurse/Dashboard';
@@ -303,6 +304,16 @@ function App() {
                 <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
                   <AdminLayout>
                     <EmailTemplates />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/vital-signs"
+              element={
+                <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+                  <AdminLayout>
+                    <AdminVitalSigns />
                   </AdminLayout>
                 </ProtectedRoute>
               }
