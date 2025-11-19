@@ -141,7 +141,10 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     const expirationText = template.expirationText || 'This link will expire in 1 hour.';
     const footerText = template.footerText || 'If you didn\'t request this, please ignore this email.';
 
-    const frontendUrl = config.FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    // Get frontend URL and ensure it doesn't have trailing slashes or incorrect paths
+    let frontendUrl = config.FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    // Remove trailing slash and any /login path that might be incorrectly included
+    frontendUrl = frontendUrl.replace(/\/+$/, '').replace(/\/login$/, '');
     const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
     
     const mailOptions = {

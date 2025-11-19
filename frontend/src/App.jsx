@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { RoleProvider } from './context/RoleContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -63,6 +63,14 @@ import About from './pages/About.jsx';
 import Services from './pages/Services.jsx';
 import Contact from './pages/Contact.jsx';
 
+// Redirect component for /login/reset-password to /reset-password
+const ResetPasswordRedirect = () => {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+  const redirectUrl = token ? `/reset-password?token=${token}` : '/reset-password';
+  return <Navigate to={redirectUrl} replace />;
+};
+
 function App() {
   return (
     <Router>
@@ -77,6 +85,11 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* Redirect /login/reset-password to /reset-password (for email links with incorrect path) */}
+            <Route 
+              path="/login/reset-password" 
+              element={<ResetPasswordRedirect />} 
+            />
             <Route path="/terms" element={<TermsAndConditions />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/about" element={<About />} />
