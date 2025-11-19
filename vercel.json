@@ -13,7 +13,8 @@
   ],
   "redirects": [
     { "source": "/", "destination": "/health", "permanent": false }
-  ]
+  ],
+  "installCommand": "npm install --legacy-peer-deps"
 }
 
 
