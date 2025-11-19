@@ -340,25 +340,49 @@ export const uploadAvatar = async (req, res) => {
     console.log('   File size:', fileBuffer.length);
     console.log('   MIME type:', mimeType);
     console.log('   Filename:', filename);
+    console.log('   Serverless environment:', !!process.env.VERCEL);
     
-    const uploadResult = await uploadToStorage(fileBuffer, filename, mimeType, 'avatars');
-    console.log('📥 Upload result received:', uploadResult ? 'Success' : 'Null (using local)');
-    
+    let uploadResult;
     let avatarValue;
     let avatarUrl;
 
-    if (uploadResult) {
-      // Cloud storage was used
-      avatarValue = uploadResult.url;
-      avatarUrl = uploadResult.url;
-      console.log(`✅ Avatar uploaded to ${uploadResult.storageType || 'cloud storage'}: ${avatarUrl}`);
-      console.log('   File ID:', uploadResult.fileId);
+    // In serverless environments, GridFS streaming can be unreliable
+    // For avatars, prefer base64 storage directly in database if GridFS fails
+    if (process.env.VERCEL) {
+      console.log('⚠️ Serverless environment detected - using base64 storage for avatars');
+      // For serverless, store avatars as base64 data URLs directly in database
+      // This is more reliable than GridFS streaming in serverless functions
+      const base64 = fileBuffer.toString('base64');
+      avatarValue = `data:${mimeType};base64,${base64}`;
+      avatarUrl = avatarValue;
+      console.log(`✅ Avatar stored as base64 data URL (length: ${avatarValue.length})`);
     } else {
-      // Local filesystem storage
-      const fileExt = req.file.originalname ? path.extname(req.file.originalname) : '.jpg';
-      avatarValue = req.file.filename || `avatar-${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExt}`;
-      avatarUrl = `/uploads/avatars/${avatarValue}`;
-      console.log(`✅ Avatar saved to local filesystem: ${avatarUrl}`);
+      // Non-serverless: Try GridFS first, fall back to base64 if it fails
+      try {
+        uploadResult = await uploadToStorage(fileBuffer, filename, mimeType, 'avatars');
+        console.log('📥 Upload result received:', uploadResult ? 'Success' : 'Null (using local)');
+        
+        if (uploadResult) {
+          // Cloud storage was used
+          avatarValue = uploadResult.url;
+          avatarUrl = uploadResult.url;
+          console.log(`✅ Avatar uploaded to ${uploadResult.storageType || 'cloud storage'}: ${avatarUrl}`);
+          console.log('   File ID:', uploadResult.fileId);
+        } else {
+          // Local filesystem storage
+          const fileExt = req.file.originalname ? path.extname(req.file.originalname) : '.jpg';
+          avatarValue = req.file.filename || `avatar-${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExt}`;
+          avatarUrl = `/uploads/avatars/${avatarValue}`;
+          console.log(`✅ Avatar saved to local filesystem: ${avatarUrl}`);
+        }
+      } catch (storageError) {
+        console.error('⚠️ Storage upload failed, falling back to base64:', storageError.message);
+        // Fallback to base64 storage in database
+        const base64 = fileBuffer.toString('base64');
+        avatarValue = `data:${mimeType};base64,${base64}`;
+        avatarUrl = avatarValue;
+        console.log(`✅ Avatar stored as base64 data URL (fallback, length: ${avatarValue.length})`);
+      }
     }
 
     // Update user with new avatar
