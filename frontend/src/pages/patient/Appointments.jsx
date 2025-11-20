@@ -3,6 +3,7 @@ import { FaSearch, FaUserMd, FaTimes } from 'react-icons/fa';
 import patientService from '../../services/patientService';
 import { APPOINTMENT_STATUS_COLORS } from '../../utils/constants';
 import { useNotifications } from '../../context/NotificationContext';
+import AppointmentCalendar from '../../components/shared/AppointmentCalendarSimple';
 
 const Appointments = () => {
   const [appointments, setAppointments] = useState([]);
@@ -139,6 +140,15 @@ const Appointments = () => {
           />
           <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         </div>
+      </div>
+
+      {/* Appointment Calendar */}
+      <div className="mb-8">
+        <AppointmentCalendar
+          fetchAppointments={patientService.getAppointments}
+          role="patient"
+          showDoctorName={true}
+        />
       </div>
 
       {filteredAppointments.length === 0 ? (

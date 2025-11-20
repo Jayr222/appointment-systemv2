@@ -455,7 +455,7 @@ const Dashboard = () => {
           </div>
         </Link>
 
-        <Link to="/patient/records" className="bg-white rounded-lg shadow-md p-6 border hover:shadow-lg transition-shadow cursor-pointer">
+        <Link to="/patient/appointments" className="bg-white rounded-lg shadow-md p-6 border hover:shadow-lg transition-shadow cursor-pointer">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm">Upcoming Appointments</p>
